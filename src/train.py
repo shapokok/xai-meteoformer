@@ -346,14 +346,23 @@ def main():
     args = p.parse_args()
 
     models = args.models if args.models else [args.model_name]
+    failed = []
     for m in models:
         args.model_name = m
         for s in (args.seeds if args.seeds else [args.seed]):
             try:
                 run_one(args, s)
             except Exception as exc:
-                # One broken baseline must not abort a 12-hour batch.
+                # One broken baseline must not abort a 12-hour batch, but the
+                # process must still exit non-zero so a caller (the Kaggle
+                # notebook's preflight) can tell that nothing was produced.
+                import traceback
+                traceback.print_exc()
                 print(f"!! {m} seed {s} FAILED: {type(exc).__name__}: {exc}")
+                failed.append((m, s))
+    if failed:
+        print(f"FAILED runs: {failed}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
