@@ -63,6 +63,36 @@ MODEL_OVERRIDES = {
 }
 
 
+def _neutralize_reformer_import(tslib_path: str) -> None:
+    """Make TSLib importable without reformer_pytorch.
+
+    layers/SelfAttention_Family.py imports reformer_pytorch at module level,
+    which every attention-based model then pulls in. reformer_pytorch drags a
+    chain of its own (local_attention -> hyper_connections -> ...), and
+    installing it with dependencies can also replace the environment's torch
+    with a wheel built for different GPU architectures.
+
+    None of our baselines use Reformer, so the import is simply made
+    optional. LSHSelfAttention is referenced only inside ReformerLayer's
+    __init__, so leaving it as None is harmless unless that layer is built.
+    """
+    f = os.path.join(tslib_path, "layers", "SelfAttention_Family.py")
+    if not os.path.exists(f):
+        return
+    with open(f) as fh:
+        txt = fh.read()
+    needle = "from reformer_pytorch import LSHSelfAttention"
+    if needle not in txt or "XAIMF_OPTIONAL_REFORMER" in txt:
+        return
+    with open(f, "w") as fh:
+        fh.write(txt.replace(needle,
+            "try:  # XAIMF_OPTIONAL_REFORMER\n"
+            "    from reformer_pytorch import LSHSelfAttention\n"
+            "except ImportError:\n"
+            "    LSHSelfAttention = None"))
+    print("  [tslib] made reformer_pytorch import optional")
+
+
 def _register_tft_layout(mod, cfg, n_channels: int) -> bool:
     """TSLib's TFT reads its covariate layout from `datatype_dict`, keyed by
     dataset name. Every built-in entry hard-codes a channel count (ETTh1 is
@@ -244,6 +274,7 @@ def build_baseline(name: str, args, n_channels: int,
     # Appended, not prepended: our own packages are named xm_layers /
     # xm_models precisely so TSLib's layers/ and models/ resolve to
     # TSLib. Prepending would also shadow our data/ package.
+    _neutralize_reformer_import(tslib_path)
     if tslib_path not in sys.path:
         sys.path.append(tslib_path)
 
@@ -257,7 +288,7 @@ def build_baseline(name: str, args, n_channels: int,
         if missing and not missing.startswith(("layers", "models", "utils")):
             raise ImportError(
                 f"'{module_name}' needs a package that is not installed: "
-                f"{missing}. Run:  pip install reformer_pytorch matplotlib einops"
+                f"{missing}. Run:  pip install matplotlib einops"
             ) from e
         raise ImportError(
             f"'{module_name}' not in this TSLib checkout ({e}). Present: {avail}"
