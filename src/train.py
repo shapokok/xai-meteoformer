@@ -49,6 +49,13 @@ ABLATIONS = {
 }
 REPORT_HORIZONS = [1, 6, 12, 24]
 
+# These models run an FFT inside the forward pass. Under AMP the transform
+# is done in half precision, and cuFFT then requires a power-of-two signal
+# length — our seq_len is 96, so it raises. Costs a little speed, nothing
+# else: the comparison stays fair because the maths is identical, only the
+# arithmetic precision differs.
+AMP_UNSAFE = {"Autoformer", "FEDformer", "TimesNet", "FiLM"}
+
 
 def set_seed(seed: int) -> None:
     random.seed(seed)
@@ -229,7 +236,11 @@ def run_one(args, seed: int) -> None:
             [max(1.0, (1 - train_ds.frost_rate) / max(train_ds.frost_rate, 1e-3))],
             device=device)
     )
-    use_amp = args.amp and device.type == "cuda"
+    use_amp = (args.amp and not args.no_amp and device.type == "cuda"
+               and args.model_name not in AMP_UNSAFE)
+    if args.model_name in AMP_UNSAFE and device.type == "cuda":
+        print(f"[{args.model_name}] AMP off (FFT needs fp32 at seq_len="
+              f"{args.seq_len})")
     scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
 
     ckpt_dir = os.path.join(out_dir, "checkpoints")
@@ -341,6 +352,7 @@ def main():
     p.add_argument("--missing_rate", type=float, default=0.0)
     p.add_argument("--num_workers", type=int, default=2)
     p.add_argument("--amp", action="store_true", default=True)
+    p.add_argument("--no_amp", action="store_true", help="force fp32")
     p.add_argument("--force", action="store_true")
     p.add_argument("--smoke", action="store_true",
                    help="1 epoch on a handful of batches; for verifying the "
