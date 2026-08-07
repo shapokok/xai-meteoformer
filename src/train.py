@@ -45,6 +45,7 @@ ABLATIONS = {
     "no_temp_attn": {"use_temp_attn": False},
     "no_fusion": {"use_fusion": False},
     "no_entropy": {},          # handled via --lambda_ent 0
+    "no_cls": {},              # handled via --lambda_cls 0
 }
 REPORT_HORIZONS = [1, 6, 12, 24]
 
@@ -195,6 +196,10 @@ def run_one(args, seed: int) -> None:
     if args.model_name == "XAI-MeteoFormer":
         kw = dict(ABLATIONS[args.ablation])
         lambda_ent = 0.0 if args.ablation == "no_entropy" else args.lambda_ent
+        if args.ablation == "no_cls":
+            # Does the auxiliary event loss actually help the regression?
+            # If not, the head can be dropped from the model entirely.
+            args.lambda_cls = 0.0
         model = XAIMeteoFormer(
             n_channels=train_ds.n_channels, target_idx=train_ds.target_idx,
             seq_len=args.seq_len, pred_len=args.pred_len,
