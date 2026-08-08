@@ -131,9 +131,24 @@ def already_done(csv_path: str, key: Dict[str, object]) -> bool:
 
 
 def append_row(csv_path: str, row: Dict[str, object]) -> None:
+    """Read-concat-rewrite, not a raw append.
+
+    A plain append keeps the header written by the very first run. If the row
+    schema later changes -- as it did when lambda_ent moved from the metric
+    tail into the resume key -- the header no longer matches the values and
+    every column between the two positions is silently shifted. pandas.concat
+    aligns on names instead and fills gaps with NaN.
+    """
     os.makedirs(os.path.dirname(csv_path) or ".", exist_ok=True)
     df = pd.DataFrame([row])
-    df.to_csv(csv_path, mode="a", header=not os.path.exists(csv_path), index=False)
+    if os.path.exists(csv_path):
+        try:
+            df = pd.concat([pd.read_csv(csv_path), df], ignore_index=True)
+        except Exception as e:
+            bad = csv_path + ".corrupt"
+            os.rename(csv_path, bad)
+            print(f"could not parse {csv_path} ({e}); moved to {bad}")
+    df.to_csv(csv_path, index=False)
 
 
 def maybe_limit(loader, lim):

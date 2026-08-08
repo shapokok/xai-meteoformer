@@ -150,6 +150,8 @@ def main():
     p.add_argument("--dropout", type=float, default=0.2)
     p.add_argument("--noise_levels", type=float, nargs="*",
                    default=[0.01, 0.05, 0.1])
+    p.add_argument("--no_shap", action="store_true",
+                   help="skip GradientSHAP; rank by permutation importance")
     p.add_argument("--exclude_time", action="store_true",
                    help="rank and score physical channels only")
     p.add_argument("--seed", type=int, default=0)
@@ -218,18 +220,32 @@ def main():
     else:
         attn_imp = None
 
-    # ---- 2. GradientSHAP -------------------------------------------------- #
-    ref = torch.cat([b["x"] for b in batches[:2]])[:128]
-    shap_acc = []
-    for b in batches[:max(1, args.max_batches // 4)]:
-        shap_acc.append(gradient_shap(model, b["x"], ref).detach().cpu().numpy())
-    shap_imp = np.concatenate(shap_acc).mean(axis=0)     # (N,)
-    store["shap_importance"] = shap_imp
-
-    # ---- 3. permutation importance (model-agnostic) ----------------------- #
+    # ---- 2. permutation importance (model-agnostic) ----------------------- #
+    # Computed first because it is the fallback ranking if gradients are
+    # unavailable.
     perm_imp, base_mae = permutation_importance(model, batches, device, N, rng)
     store["perm_importance"] = perm_imp
     res["base_mae"] = base_mae
+
+    # ---- 3. GradientSHAP --------------------------------------------------- #
+    # Several TSLib models normalise in place (`x_enc /= stdev`), which trips
+    # autograd's version counter when differentiating w.r.t. the input. That is
+    # their implementation detail, not a property of the method, so SHAP is
+    # treated as optional rather than patching third-party sources.
+    shap_imp = None
+    if not args.no_shap:
+        try:
+            ref = torch.cat([b["x"] for b in batches[:2]])[:128]
+            shap_acc = []
+            for b in batches[:max(1, args.max_batches // 4)]:
+                shap_acc.append(
+                    gradient_shap(model, b["x"], ref).detach().cpu().numpy())
+            shap_imp = np.concatenate(shap_acc).mean(axis=0)     # (N,)
+            store["shap_importance"] = shap_imp
+        except RuntimeError as e:
+            print(f"GradientSHAP unavailable for {args.model}: {e}")
+            print("  -> ranking falls back to permutation importance")
+    res["has_shap"] = shap_imp is not None
 
     # ---- 4. fidelity ------------------------------------------------------ #
     keep = np.array([i for i, c in enumerate(names)
@@ -239,19 +255,42 @@ def main():
 
     ks = [0, 1, 2, 3, 5, 8]
     ks = [k for k in ks if k <= len(keep)]
-    ref_imp = attn_imp if attn_imp is not None else shap_imp
-    order = list(keep[np.argsort(-ref_imp[keep])])
-    rand_order = list(rng.permutation(keep))
+    nz = np.array(ks) > 0
     store["fidelity_ks"] = np.array(ks)
-    store["fidelity_explained"] = fidelity_curve(model, batches, device,
-                                                 order, ks, rng)
+
+    rand_order = list(rng.permutation(keep))
     store["fidelity_random"] = fidelity_curve(model, batches, device,
                                               rand_order, ks, rng)
-    # area between the two curves: how much better than a random ranking
-    nz = np.array(ks) > 0
-    res["fidelity_gain"] = float(
-        (store["fidelity_explained"][nz] - store["fidelity_random"][nz]).mean())
-    res["fidelity_gain_rel"] = res["fidelity_gain"] / max(base_mae, 1e-9)
+
+    # Fidelity is measured by permuting the top-k channels, so a ranking that
+    # came FROM permutation importance is tuned for this test almost by
+    # construction. Scoring every available ranking makes the comparison
+    # interpretable two ways: across models on the same ranking method
+    # (permutation, available for all), and within this model between its
+    # built-in attention and a post-hoc method.
+    rankings = {"perm": perm_imp}
+    if attn_imp is not None:
+        rankings["attn"] = attn_imp
+    if shap_imp is not None:
+        rankings["shap"] = shap_imp
+
+    for rk, imp in rankings.items():
+        order = list(keep[np.argsort(-imp[keep])])
+        curve = fidelity_curve(model, batches, device, order, ks, rng)
+        store[f"fidelity_{rk}"] = curve
+        gain = float((curve[nz] - store["fidelity_random"][nz]).mean())
+        res[f"fidelity_gain_{rk}"] = gain
+        res[f"fidelity_gain_{rk}_rel"] = gain / max(base_mae, 1e-9)
+
+    # headline numbers keep their old names: the model's own explanation when
+    # it has one, otherwise the post-hoc ranking
+    primary = "attn" if attn_imp is not None else (
+        "shap" if shap_imp is not None else "perm")
+    res["primary_ranking"] = primary
+    res["fidelity_gain"] = res[f"fidelity_gain_{primary}"]
+    res["fidelity_gain_rel"] = res[f"fidelity_gain_{primary}_rel"]
+    ref_imp = rankings[primary]
+    store["fidelity_explained"] = store[f"fidelity_{primary}"]
 
     # ---- 5. stability ----------------------------------------------------- #
     for s in args.noise_levels:
@@ -273,16 +312,18 @@ def main():
 
     # ---- 6. agreement attention vs SHAP vs permutation -------------------- #
     if attn_imp is not None:
-        r, c, o = rank_agreement(attn_imp[keep], shap_imp[keep])
-        res["agree_attn_shap_rho"] = r
-        res["agree_attn_shap_cos"] = c
-        res["agree_attn_shap_top5"] = o
         r, c, o = rank_agreement(attn_imp[keep], perm_imp[keep])
         res["agree_attn_perm_rho"] = r
         res["agree_attn_perm_top5"] = o
-    r, c, o = rank_agreement(shap_imp[keep], perm_imp[keep])
-    res["agree_shap_perm_rho"] = r
-    res["agree_shap_perm_top5"] = o
+        if shap_imp is not None:
+            r, c, o = rank_agreement(attn_imp[keep], shap_imp[keep])
+            res["agree_attn_shap_rho"] = r
+            res["agree_attn_shap_cos"] = c
+            res["agree_attn_shap_top5"] = o
+    if shap_imp is not None:
+        r, c, o = rank_agreement(shap_imp[keep], perm_imp[keep])
+        res["agree_shap_perm_rho"] = r
+        res["agree_shap_perm_top5"] = o
 
     # ---- 7. horizon-specific importance ----------------------------------- #
     if not args.skip_internal:
@@ -306,9 +347,21 @@ def main():
     tag = os.path.basename(args.ckpt).replace(".pt", "")
     np.savez_compressed(os.path.join(xdir, f"{tag}_xai.npz"), **store)
 
+    # Read-concat-rewrite rather than append: runs produce different key sets
+    # (--skip_internal drops the attention columns, --exclude_time adds two),
+    # and a plain append keeps the first run's header while writing wider rows,
+    # which silently corrupts the file.
     csv = os.path.join(args.out_dir, "xai_metrics.csv")
-    pd.DataFrame([res]).to_csv(csv, mode="a", header=not os.path.exists(csv),
-                               index=False)
+    row = pd.DataFrame([res])
+    if os.path.exists(csv):
+        try:
+            old = pd.read_csv(csv)
+            row = pd.concat([old, row], ignore_index=True)
+        except Exception as e:
+            bad = csv + ".corrupt"
+            os.rename(csv, bad)
+            print(f"could not parse {csv} ({e}); moved to {bad}")
+    row.to_csv(csv, index=False)
 
     print(json.dumps({k: (round(v, 4) if isinstance(v, float) else v)
                       for k, v in res.items()}, indent=2))
