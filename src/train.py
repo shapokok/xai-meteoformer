@@ -178,9 +178,15 @@ def run_one(args, seed: int) -> None:
         args.epochs, args.patience = 1, 1
         print(f"SMOKE MODE: 1 epoch, {lim} batches, artefacts -> {out_dir}/")
 
+    # lambda_ent belongs in the key: without it a sweep over the entropy
+    # weight would collide with the default run and every point after the
+    # first would be skipped as "already done".
+    lam_key = (0.0 if (args.model_name != "XAI-MeteoFormer"
+                       or args.ablation == "no_entropy")
+               else args.lambda_ent)
     key = {"model": args.model_name, "dataset": args.dataset,
            "ablation": args.ablation, "seed": seed,
-           "missing_rate": args.missing_rate}
+           "missing_rate": args.missing_rate, "lambda_ent": lam_key}
     if already_done(results_csv, key) and not args.force:
         print(f"skip (already in results): {key}")
         return
@@ -245,7 +251,9 @@ def run_one(args, seed: int) -> None:
 
     ckpt_dir = os.path.join(out_dir, "checkpoints")
     os.makedirs(ckpt_dir, exist_ok=True)
-    tag = f"{args.model_name}_{args.dataset}_{args.ablation}_s{seed}"
+    # keep the default tag unchanged so existing checkpoints stay valid
+    suffix = "" if lam_key == 0.01 or lam_key == 0.0 else f"_le{lam_key}"
+    tag = f"{args.model_name}_{args.dataset}_{args.ablation}{suffix}_s{seed}"
     ckpt_path = os.path.join(ckpt_dir, f"{tag}.pt")
 
     best, patience, t0 = float("inf"), 0, time.time()
@@ -315,7 +323,7 @@ def run_one(args, seed: int) -> None:
            "epochs_run": ep + 1, "seq_len": args.seq_len,
            "pred_len": args.pred_len, "d_model": args.d_model,
            "n_layers": args.n_layers, "lr": args.lr,
-           "lambda_ent": lambda_ent, **metrics}
+           **metrics}
     append_row(results_csv, row)
     print(json.dumps({k: v for k, v in row.items()
                       if k in ("MAE", "RMSE", "R2", "CLS_AUC", "CLS_F1")}, indent=2))
