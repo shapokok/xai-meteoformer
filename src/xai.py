@@ -39,6 +39,7 @@ from torch.utils.data import DataLoader
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from baselines.tslib_adapter import build_baseline          # noqa: E402
+from train import ABLATIONS                                  # noqa: E402
 from data.dataset import build_splits                        # noqa: E402
 from xm_models.xai_meteoformer import XAIMeteoFormer         # noqa: E402
 
@@ -150,6 +151,9 @@ def main():
     p.add_argument("--dropout", type=float, default=0.2)
     p.add_argument("--noise_levels", type=float, nargs="*",
                    default=[0.01, 0.05, 0.1])
+    p.add_argument("--ablation", default="auto",
+                   help="architecture variant of the checkpoint; 'auto' reads "
+                        "it from the filename")
     p.add_argument("--no_shap", action="store_true",
                    help="skip GradientSHAP; rank by permutation importance")
     p.add_argument("--exclude_time", action="store_true",
@@ -178,13 +182,29 @@ def main():
             break
         batches.append({k: v.to(device) for k, v in b.items()})
 
+    # The checkpoint must be loaded into the architecture it was trained as:
+    # a no_revin checkpoint has no revin.weight/bias, so building the default
+    # model and calling load_state_dict fails outright.
+    abl = args.ablation
+    if abl == "auto":
+        base = os.path.basename(args.ckpt)
+        base = base[:-3] if base.endswith(".pt") else base
+        prefix = f"{args.model}_{args.dataset}_"
+        abl = (base[len(prefix):].rsplit("_s", 1)[0]
+               if base.startswith(prefix) else "full")
+        if abl not in ABLATIONS:
+            abl = "full"
+    res_ablation = abl
+
     if args.model == "XAI-MeteoFormer":
+        print(f"building XAI-MeteoFormer as '{abl}'")
         model = XAIMeteoFormer(
             n_channels=N, target_idx=test.target_idx,
             seq_len=args.seq_len, pred_len=args.pred_len,
             patch_len=args.patch_len, stride=args.stride,
             d_model=args.d_model, n_heads=args.n_heads,
-            n_layers=args.n_layers, dropout=args.dropout).to(device)
+            n_layers=args.n_layers, dropout=args.dropout,
+            **ABLATIONS[abl]).to(device)
     else:
         model = build_baseline(args.model, args, N, test.target_idx,
                                test.target_names,
@@ -193,7 +213,7 @@ def main():
     model.eval()
 
     res = {"model": args.model, "dataset": args.dataset,
-           "ckpt": os.path.basename(args.ckpt)}
+           "ablation": res_ablation, "ckpt": os.path.basename(args.ckpt)}
     store = {"channels": np.array(names)}
 
     # ---- 1. built-in attention ------------------------------------------- #

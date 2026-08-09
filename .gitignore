@@ -5,3 +5,13 @@
 __pycache__/
 *.pyc
 .DS_Store
+/checkpoints/
+/predictions/
+/outputs/
+/xai/
+/data/
+/Time-Series-Library/
+/paper/
+*.npz
+*.npy
+*.pt
