@@ -26,8 +26,15 @@ import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OURS = "XAI-MeteoFormer"
-# MPS raises an internal Metal assertion on Tensor.unfold (patching)
-CPU_ONLY = {"PatchTST", OURS}
+# Every model now runs on MPS: analysis/xai_patches.py works around the
+# Tensor.unfold bug and the in-place division that blocked GradientSHAP.
+CPU_ONLY = set()
+# src/xai.py is run through this wrapper so the patches are in place before
+# any model is built. src/ itself is not modified.
+WRAPPER = ("import sys, runpy; sys.path.insert(0, {analysis!r}); "
+           "import xai_patches; "
+           "sys.argv = [{xai!r}] + sys.argv[1:]; "
+           "runpy.run_path({xai!r}, run_name='__main__')")
 
 
 def main():
@@ -69,7 +76,9 @@ def main():
         if os.path.exists(os.path.join(npz_dir, f"{tag}_xai.npz")):
             print(f"[{i}/{len(jobs)}] skip {tag}", flush=True)
             continue
-        cmd = [sys.executable, os.path.join(ROOT, "src", "xai.py"),
+        xai = os.path.join(ROOT, "src", "xai.py")
+        cmd = [sys.executable, "-c",
+               WRAPPER.format(analysis=os.path.join(ROOT, "analysis"), xai=xai),
                "--dataset", ds, "--model", m, "--ckpt", f,
                "--ablation", abl, "--seed", str(s),
                "--max_batches", str(a.max_batches),
