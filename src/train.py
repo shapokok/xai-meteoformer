@@ -50,6 +50,12 @@ ABLATIONS = {
     "no_entropy": {},          # handled via --lambda_ent 0
     "no_cls": {},              # handled via --lambda_cls 0
 }
+# The same component ablations taken from the headline configuration
+# (no_revin) instead of from full. The table above stays as the ablation of
+# the RevIN-on configuration.
+for _k in ("no_multiscale", "no_var_attn", "no_temp_attn",
+           "no_fusion", "no_entropy", "no_cls"):
+    ABLATIONS[f"no_revin+{_k}"] = {"use_revin": False, **ABLATIONS[_k]}
 REPORT_HORIZONS = [1, 6, 12, 24]
 
 # These models run an FFT inside the forward pass. Under AMP the transform
@@ -200,7 +206,7 @@ def run_one(args, seed: int) -> None:
     # weight would collide with the default run and every point after the
     # first would be skipped as "already done".
     lam_key = (0.0 if (args.model_name != "XAI-MeteoFormer"
-                       or args.ablation == "no_entropy")
+                       or "no_entropy" in args.ablation.split("+"))
                else args.lambda_ent)
     from baselines.tslib_adapter import historical_norm_variant
     if args.model_name == "XAI-MeteoFormer":
@@ -239,8 +245,9 @@ def run_one(args, seed: int) -> None:
 
     if args.model_name == "XAI-MeteoFormer":
         kw = dict(ABLATIONS[args.ablation])
-        lambda_ent = 0.0 if args.ablation == "no_entropy" else args.lambda_ent
-        if args.ablation == "no_cls":
+        lambda_ent = (0.0 if "no_entropy" in args.ablation.split("+")
+                      else args.lambda_ent)
+        if "no_cls" in args.ablation.split("+"):
             # Does the auxiliary event loss actually help the regression?
             # If not, the head can be dropped from the model entirely.
             args.lambda_cls = 0.0
