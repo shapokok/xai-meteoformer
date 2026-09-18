@@ -41,6 +41,8 @@ from torch.utils.data import DataLoader
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "src"))
+sys.path.insert(0, os.path.join(ROOT, "analysis"))
+import mps_unfold_fix  # noqa: E402,F401  lets patching run on MPS
 from data.dataset import build_splits                      # noqa: E402
 from train import ABLATIONS, set_seed                      # noqa: E402
 from xm_models.xai_meteoformer import XAIMeteoFormer       # noqa: E402
