@@ -15,3 +15,6 @@ __pycache__/
 *.npz
 *.npy
 *.pt
+/predictions_val/
+/xai_v2_out/
+paper.zip

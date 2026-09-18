@@ -1,0 +1,46 @@
+--- /private/tmp/claude-501/-Users-shapok-Desktop-xai-meteoformer/0eed8434-b40e-491b-b4c5-5fe26b5b6778/scratchpad/revin_before.py	2026-09-18 12:40:43
++++ src/xm_layers/revin.py	2026-09-18 12:43:09
+@@ -14,11 +14,26 @@
+ 
+ 
+ class RevIN(nn.Module):
+-    def __init__(self, num_channels: int, eps: float = 1e-5, affine: bool = True):
++    def __init__(self, num_channels: int, eps: float = 1e-5, affine: bool = True,
++                 mode: str = "full"):
++        """mode:
++          "full"      - subtract the window mean AND divide by the window sd,
++                        the standard RevIN.
++          "mean_only" - subtract the window mean, do NOT divide. Isolates the
++                        mechanism: analysis/error_decomposition.md shows the
++                        RevIN penalty grows with the amplitude of the excursion
++                        inside the forecast window, which is what dividing by
++                        the sd of a quiet input window would cause. If the
++                        damage comes from the scale term, mean_only should
++                        recover most of the no_revin advantage; if it comes
++                        from the centring, it should not.
++        """
+         super().__init__()
++        assert mode in ("full", "mean_only"), mode
+         self.num_channels = num_channels
+         self.eps = eps
+         self.affine = affine
++        self.mode = mode
+         if affine:
+             self.weight = nn.Parameter(torch.ones(num_channels))
+             self.bias = nn.Parameter(torch.zeros(num_channels))
+@@ -28,9 +43,12 @@
+     def normalize(self, x: torch.Tensor) -> torch.Tensor:
+         """x: (B, L, C) -> (B, L, C)"""
+         self.mean = x.mean(dim=1, keepdim=True).detach()             # (B, 1, C)
+-        self.stdev = torch.sqrt(
+-            x.var(dim=1, keepdim=True, unbiased=False) + self.eps
+-        ).detach()                                                    # (B, 1, C)
++        if self.mode == "full":
++            self.stdev = torch.sqrt(
++                x.var(dim=1, keepdim=True, unbiased=False) + self.eps
++            ).detach()                                                # (B, 1, C)
++        else:
++            self.stdev = torch.ones_like(self.mean)
+         x = (x - self.mean) / self.stdev
+         if self.affine:
+             x = x * self.weight + self.bias

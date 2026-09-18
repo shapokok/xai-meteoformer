@@ -1,0 +1,60 @@
+--- /private/tmp/claude-501/-Users-shapok-Desktop-xai-meteoformer/0eed8434-b40e-491b-b4c5-5fe26b5b6778/scratchpad/train_before.py	2026-09-18 12:40:43
++++ src/train.py	2026-09-18 12:43:09
+@@ -40,6 +40,9 @@
+ ABLATIONS = {
+     "full": {},
+     "no_revin": {"use_revin": False},
++    # Mechanism probe for the RevIN effect: centre the window but do not
++    # divide by its sd. See analysis/revin_mechanism.md.
++    "revin_mean_only": {"revin_mode": "mean_only"},
+     "no_multiscale": {"use_multiscale": False},
+     "no_var_attn": {"use_var_attn": False},
+     "no_temp_attn": {"use_temp_attn": False},
+@@ -199,9 +202,11 @@
+     lam_key = (0.0 if (args.model_name != "XAI-MeteoFormer"
+                        or args.ablation == "no_entropy")
+                else args.lambda_ent)
++    nv = "off" if args.model_name == "XAI-MeteoFormer" else args.norm_variant
+     key = {"model": args.model_name, "dataset": args.dataset,
+            "ablation": args.ablation, "seed": seed,
+-           "missing_rate": args.missing_rate, "lambda_ent": lam_key}
++           "missing_rate": args.missing_rate, "lambda_ent": lam_key,
++           "norm_variant": nv}
+     if already_done(results_csv, key) and not args.force:
+         print(f"skip (already in results): {key}")
+         return
+@@ -242,7 +247,7 @@
+         model = build_baseline(
+             args.model_name, args, train_ds.n_channels,
+             train_ds.target_idx, train_ds.target_names,
+-            tslib_path=args.tslib_path,
++            tslib_path=args.tslib_path, norm_variant=args.norm_variant,
+         ).to(device)
+ 
+     n_par = sum(p.numel() for p in model.parameters() if p.requires_grad)
+@@ -268,6 +273,12 @@
+     os.makedirs(ckpt_dir, exist_ok=True)
+     # keep the default tag unchanged so existing checkpoints stay valid
+     suffix = "" if lam_key == 0.01 or lam_key == 0.0 else f"_le{lam_key}"
++    # LSTM historically ran with RevIN, every other baseline without it, so
++    # those combinations keep the old tag and the existing checkpoints stay
++    # valid. Only the newly added variant gets a suffix.
++    historical = "on" if args.model_name == "LSTM" else "off"
++    if args.model_name != "XAI-MeteoFormer" and args.norm_variant != historical:
++        suffix += f"_norm{args.norm_variant}"
+     tag = f"{args.model_name}_{args.dataset}_{args.ablation}{suffix}_s{seed}"
+     ckpt_path = os.path.join(ckpt_dir, f"{tag}.pt")
+ 
+@@ -351,6 +362,12 @@
+     p.add_argument("--out_dir", default="outputs")
+     p.add_argument("--results_csv", default="outputs/results.csv")
+     p.add_argument("--model_name", default="XAI-MeteoFormer", choices=AVAILABLE)
++    p.add_argument("--norm_variant", default="off", choices=["on", "off"],
++                   help="per-window normalization for BASELINES only: 'off' "
++                        "runs each model exactly as its source defines it "
++                        "(and LSTM without our RevIN); 'on' adds the same "
++                        "RevIN the proposed model uses to the baselines that "
++                        "have none. No effect on self-normalizing baselines.")
+     p.add_argument("--models", nargs="*", default=None,
+                    help="run several models in one go, e.g. --models DLinear PatchTST")
+     p.add_argument("--tslib_path", default=None,

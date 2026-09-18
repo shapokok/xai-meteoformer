@@ -157,7 +157,12 @@ def make_configs(args, n_channels: int, **overrides) -> SimpleNamespace:
         num_kernels=6, top_k=5,
         patch_len=args.patch_len, stride=args.stride,
         seg_len=12, win_size=2,
-        channel_independence=1, use_norm=1,
+        channel_independence=1,
+        # use_norm is read ONLY by TimeXer and TimeMixer in this TSLib
+        # checkout, and neither is used here. It is kept at 1 so the config
+        # stays valid if one is added later, but it controls nothing for any
+        # baseline in this study -- see analysis/tuning_symmetry_audit.md.
+        use_norm=1,                    # UNUSED by every baseline we run
         decomp_method="moving_avg",
         down_sampling_layers=0, down_sampling_window=1,
         down_sampling_method="avg",
@@ -173,26 +178,42 @@ def make_configs(args, n_channels: int, **overrides) -> SimpleNamespace:
 
 
 class SimpleRNN(nn.Module):
-    """LSTM / GRU baseline. Gets RevIN too — the TSLib models all carry
-    some internal normalization, so withholding it here would stack the
-    deck against the classic baseline."""
+    """LSTM / GRU baseline.
+
+    `use_revin=True` adds the same RevIN the proposed model uses. This is an
+    addition beyond the textbook baseline and is disclosed as such: with
+    --norm_variant off the RNN runs without it, which is the standard
+    configuration.
+    """
 
     def __init__(self, kind: str, n_channels: int, n_targets: int,
                  pred_len: int, hidden: int = 256, layers: int = 2,
-                 dropout: float = 0.2):
+                 dropout: float = 0.2, use_revin: bool = True):
         super().__init__()
         rnn = nn.LSTM if kind == "LSTM" else nn.GRU
-        self.revin = RevIN(n_channels)
+        self.revin = RevIN(n_channels) if use_revin else None
         self.rnn = rnn(n_channels, hidden, num_layers=layers,
                        batch_first=True, dropout=dropout if layers > 1 else 0.0)
         self.head = nn.Linear(hidden, pred_len * n_targets)
         self.pred_len, self.n_targets = pred_len, n_targets
 
     def forward(self, x):
-        x = self.revin.normalize(x)
+        if self.revin is not None:
+            x = self.revin.normalize(x)
         out, _ = self.rnn(x)
         y = self.head(out[:, -1])
         return y.view(x.size(0), self.pred_len, self.n_targets), self.revin
+
+
+# Baselines whose executed forward path contains no per-window instance
+# normalization, verified by reading the TSLib source: DLinear, Crossformer
+# and Transformer have none; Informer normalizes only in short_forecast(),
+# which task_name='long_term_forecast' never calls; Autoformer's mean is the
+# decomposition trend initialiser, not an input normalization.
+UNNORMALIZED = {"DLinear", "Crossformer", "Transformer", "Informer",
+                "Autoformer", "FEDformer", "TimeMixer"}
+# Baselines that normalize unconditionally inside their own forward pass.
+SELF_NORMALIZING = {"PatchTST", "iTransformer", "TimesNet", "TFT"}
 
 
 class BaselineWrapper(nn.Module):
@@ -201,9 +222,13 @@ class BaselineWrapper(nn.Module):
     def __init__(self, core: nn.Module, name: str, target_idx: List[int],
                  seq_len: int, pred_len: int, needs_dec: bool,
                  n_time_feats: int = 4, temp_pos: int = 0,
-                 is_rnn: bool = False):
+                 is_rnn: bool = False, revin: Optional[nn.Module] = None):
         super().__init__()
         self.core = core
+        # Optional external RevIN, used only for baselines whose own forward
+        # pass has no instance normalization. Identical layer to the one the
+        # proposed model uses, so the comparison is like for like.
+        self.revin = revin
         self.name = name
         self.register_buffer("target_idx", torch.tensor(target_idx, dtype=torch.long))
         self.seq_len, self.pred_len = seq_len, pred_len
@@ -215,9 +240,12 @@ class BaselineWrapper(nn.Module):
 
     def forward(self, x: torch.Tensor, return_explanations: bool = False):
         B = x.size(0)
+        if self.revin is not None:
+            x = self.revin.normalize(x)
         if self.is_rnn:
             y, revin = self.core(x)
-            y = revin.denormalize(y, self.target_idx)
+            if revin is not None:
+                y = revin.denormalize(y, self.target_idx)
         else:
             # The last four channels are hour_sin/cos, doy_sin/cos, which
             # is exactly what embed='timeF' with freq='h' expects.
@@ -236,6 +264,8 @@ class BaselineWrapper(nn.Module):
                 out = out[0]
             y = out[:, -self.pred_len:, :]              # (B, H, N)
             y = y[:, :, self.target_idx]                # (B, H, n_targets)
+        if self.revin is not None:
+            y = self.revin.denormalize(y, self.target_idx)
 
         # threshold-the-regression score for the event task
         logits = -y[:, :, self.temp_pos:self.temp_pos + 1]
@@ -250,13 +280,36 @@ class BaselineWrapper(nn.Module):
 
 def build_baseline(name: str, args, n_channels: int,
                    target_idx: List[int], target_names: List[str],
-                   tslib_path: Optional[str] = None) -> nn.Module:
+                   tslib_path: Optional[str] = None,
+                   norm_variant: str = "off",
+                   width: Optional[tuple] = None) -> nn.Module:
+    """norm_variant controls ONLY the per-window normalization.
+
+      "off" - the configuration used for every result up to now: each model
+              runs exactly as its source code defines it. For the models in
+              UNNORMALIZED that means no instance normalization at all; for
+              LSTM it means no RevIN, i.e. the textbook baseline.
+      "on"  - adds the same RevIN layer the proposed model uses to the models
+              in UNNORMALIZED, and keeps it for LSTM.
+
+    width, if given, is (d_model, d_ff) and overrides BOTH the shared config
+    and any entry in MODEL_OVERRIDES for this model. MODEL_OVERRIDES was
+    sized for an 8 GB card; on the 16 GB T4 the capacity-limited baselines
+    can be run at full width, and this is how that is requested.
+
+    Models in SELF_NORMALIZING are unaffected by this flag: their instance
+    normalization is hardcoded inside their published forward pass and is not
+    removed here, because stripping it would produce a model their authors
+    never proposed. This is stated in analysis/tuning_symmetry_audit.md.
+    """
+    assert norm_variant in ("on", "off"), norm_variant
     temp_pos = target_names.index("T") if "T" in target_names else 0
 
     if name in LOCAL_MODELS:
         core = SimpleRNN(name, n_channels, len(target_idx), args.pred_len,
                          hidden=args.d_model, layers=args.n_layers,
-                         dropout=args.dropout)
+                         dropout=args.dropout,
+                         use_revin=(norm_variant == "on"))
         return BaselineWrapper(core, name, target_idx, args.seq_len,
                                args.pred_len, needs_dec=False,
                                temp_pos=temp_pos, is_rnn=True)
@@ -294,14 +347,27 @@ def build_baseline(name: str, args, n_channels: int,
             f"'{module_name}' not in this TSLib checkout ({e}). Present: {avail}"
         ) from e
 
-    cfg = make_configs(args, n_channels, **MODEL_OVERRIDES.get(name, {}))
+    ov = dict(MODEL_OVERRIDES.get(name, {}))
+    if width is not None:
+        ov["d_model"], ov["d_ff"] = int(width[0]), int(width[1])
+        print(f"  [{name}] width override: d_model={ov['d_model']} "
+              f"d_ff={ov['d_ff']}")
+    cfg = make_configs(args, n_channels, **ov)
     if module_name == "TemporalFusionTransformer":
         if _register_tft_layout(mod, cfg, n_channels):
             print(f"  [{name}] registered covariate layout with all "
                   f"{n_channels} channels observed")
     core = _instantiate(mod, cfg, name)
+    revin = None
+    if norm_variant == "on":
+        if name in UNNORMALIZED:
+            revin = RevIN(n_channels)
+            print(f"  [{name}] RevIN added (norm_variant=on)")
+        else:
+            print(f"  [{name}] already self-normalizing; norm_variant=on "
+                  f"is a no-op")
     return BaselineWrapper(core, name, target_idx, args.seq_len, args.pred_len,
-                           needs_dec=needs_dec, temp_pos=temp_pos)
+                           needs_dec=needs_dec, temp_pos=temp_pos, revin=revin)
 
 
 if __name__ == "__main__":

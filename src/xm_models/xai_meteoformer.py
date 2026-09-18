@@ -142,6 +142,7 @@ class XAIMeteoFormer(nn.Module):
         dropout: float = 0.2,
         dilations: Tuple[int, ...] = (1, 4, 12),
         use_revin: bool = True,
+        revin_mode: str = "full",
         use_multiscale: bool = True,
         use_var_attn: bool = True,
         use_temp_attn: bool = True,
@@ -169,7 +170,7 @@ class XAIMeteoFormer(nn.Module):
         self.num_patches = (seq_len - patch_len) // stride + 1
         d_ff = d_ff or 4 * d_model
 
-        self.revin = RevIN(n_channels) if use_revin else None
+        self.revin = RevIN(n_channels, mode=revin_mode) if use_revin else None
         self.ms = MultiScaleTemporalBlock(d_ms, dilations, dropout=dropout) \
             if use_multiscale else None
 

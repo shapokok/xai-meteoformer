@@ -40,6 +40,9 @@ from baselines.tslib_adapter import AVAILABLE, build_baseline  # noqa: E402
 ABLATIONS = {
     "full": {},
     "no_revin": {"use_revin": False},
+    # Mechanism probe for the RevIN effect: centre the window but do not
+    # divide by its sd. See analysis/revin_mechanism.md.
+    "revin_mean_only": {"revin_mode": "mean_only"},
     "no_multiscale": {"use_multiscale": False},
     "no_var_attn": {"use_var_attn": False},
     "no_temp_attn": {"use_temp_attn": False},
@@ -199,9 +202,18 @@ def run_one(args, seed: int) -> None:
     lam_key = (0.0 if (args.model_name != "XAI-MeteoFormer"
                        or args.ablation == "no_entropy")
                else args.lambda_ent)
+    nv = "off" if args.model_name == "XAI-MeteoFormer" else args.norm_variant
+    # Width is part of the resume key: a 256x1024 Crossformer must not be
+    # skipped because a 128x128 one is already in the table.
+    if args.model_name == "XAI-MeteoFormer" or args.bl_d_model is None:
+        width, width_tag = None, "default"
+    else:
+        dff = args.bl_d_ff if args.bl_d_ff else 4 * args.bl_d_model
+        width, width_tag = (args.bl_d_model, dff), f"{args.bl_d_model}x{dff}"
     key = {"model": args.model_name, "dataset": args.dataset,
            "ablation": args.ablation, "seed": seed,
-           "missing_rate": args.missing_rate, "lambda_ent": lam_key}
+           "missing_rate": args.missing_rate, "lambda_ent": lam_key,
+           "norm_variant": nv, "width": width_tag}
     if already_done(results_csv, key) and not args.force:
         print(f"skip (already in results): {key}")
         return
@@ -242,7 +254,8 @@ def run_one(args, seed: int) -> None:
         model = build_baseline(
             args.model_name, args, train_ds.n_channels,
             train_ds.target_idx, train_ds.target_names,
-            tslib_path=args.tslib_path,
+            tslib_path=args.tslib_path, norm_variant=args.norm_variant,
+            width=width,
         ).to(device)
 
     n_par = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -268,6 +281,14 @@ def run_one(args, seed: int) -> None:
     os.makedirs(ckpt_dir, exist_ok=True)
     # keep the default tag unchanged so existing checkpoints stay valid
     suffix = "" if lam_key == 0.01 or lam_key == 0.0 else f"_le{lam_key}"
+    # LSTM historically ran with RevIN, every other baseline without it, so
+    # those combinations keep the old tag and the existing checkpoints stay
+    # valid. Only the newly added variant gets a suffix.
+    historical = "on" if args.model_name == "LSTM" else "off"
+    if args.model_name != "XAI-MeteoFormer" and args.norm_variant != historical:
+        suffix += f"_norm{args.norm_variant}"
+    if width_tag != "default":
+        suffix += f"_w{width_tag}"
     tag = f"{args.model_name}_{args.dataset}_{args.ablation}{suffix}_s{seed}"
     ckpt_path = os.path.join(ckpt_dir, f"{tag}.pt")
 
@@ -333,7 +354,10 @@ def run_one(args, seed: int) -> None:
         np.save(os.path.join(pred_dir, f"{args.dataset}_true.npy"),
                 true.astype(np.float32))
 
-    row = {**key, "params": n_par, "train_time_s": round(train_time, 1),
+    row = {**key,
+           "bl_d_model": (width[0] if width else None),
+           "bl_d_ff": (width[1] if width else None),
+           "params": n_par, "train_time_s": round(train_time, 1),
            "infer_time_s": round(infer_time, 2), "best_val": best,
            "epochs_run": ep + 1, "seq_len": args.seq_len,
            "pred_len": args.pred_len, "d_model": args.d_model,
@@ -351,6 +375,18 @@ def main():
     p.add_argument("--out_dir", default="outputs")
     p.add_argument("--results_csv", default="outputs/results.csv")
     p.add_argument("--model_name", default="XAI-MeteoFormer", choices=AVAILABLE)
+    p.add_argument("--bl_d_model", type=int, default=None,
+                   help="override a BASELINE's d_model (MODEL_OVERRIDES was "
+                        "sized for 8 GB; the T4 has 16 GB). No effect on "
+                        "XAI-MeteoFormer.")
+    p.add_argument("--bl_d_ff", type=int, default=None,
+                   help="override a BASELINE's d_ff; defaults to 4*bl_d_model")
+    p.add_argument("--norm_variant", default="off", choices=["on", "off"],
+                   help="per-window normalization for BASELINES only: 'off' "
+                        "runs each model exactly as its source defines it "
+                        "(and LSTM without our RevIN); 'on' adds the same "
+                        "RevIN the proposed model uses to the baselines that "
+                        "have none. No effect on self-normalizing baselines.")
     p.add_argument("--models", nargs="*", default=None,
                    help="run several models in one go, e.g. --models DLinear PatchTST")
     p.add_argument("--tslib_path", default=None,

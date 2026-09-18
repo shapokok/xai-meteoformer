@@ -50,7 +50,9 @@ def load_results(paths):
         d = pd.read_csv(p)
         if set(SHIFT_HEAD) <= set(d.columns):
             d[SHIFT_HEAD] = d[SHIFT_HEAD].astype(float)
-            sh = d["params"] < 1000          # lambda_ent sitting in params
+            # seq_len is 96 in every run ever made; in a rotated row that
+            # cell holds the epoch count, which makes the test exact.
+            sh = d["seq_len"] != 96
             if sh.any():
                 d.loc[sh, SHIFT_ACT] = d.loc[sh, SHIFT_HEAD].values
                 print(f"  {os.path.basename(p)}: repaired {int(sh.sum())} rows")
@@ -116,7 +118,11 @@ def table_main(d, out, summary):
 
 
 def table_significance(d, out, summary):
-    """Welch t-test of the proposed model against each baseline, Holm-corrected."""
+    """SUPERSEDED by analysis/significance.py -- unpaired Welch t-test.
+
+    Kept for reference only; not called from main(). The seeds are matched
+    across models, so an unpaired test is the wrong null and has less power.
+    """
     for ds in sorted(d.dataset.unique()):
         ours = d[(d.model == PROPOSED) & (d.ablation == "no_revin") &
                  (d.dataset == ds)]
@@ -175,17 +181,22 @@ def table_ablation(d, out, summary):
         return
     g = (sub.groupby("ablation")[["best_val", "MAE", "RMSE", "R2"]]
             .agg(["mean", "std"]).sort_values(("best_val", "mean")))
-    lines = ["\\begin{tabular}{lcccc}", "\\toprule",
-             "Variant & Val.\\ loss & MAE & RMSE & $R^2$ \\\\", "\\midrule"]
+    n_seeds = sub.groupby("ablation")["seed"].nunique()
+    lines = ["\\begin{tabular}{lccccc}", "\\toprule",
+             "Variant & $n$ seeds & Val.\\ loss & MAE & RMSE & $R^2$ \\\\",
+             "\\midrule"]
     for name, r in g.iterrows():
         lines.append(
-            f"{name.replace('_', ' ')} & {r[('best_val','mean')]:.4f} & "
+            f"{name.replace('_', ' ')} & {int(n_seeds[name])} & "
+            f"{r[('best_val','mean')]:.4f} & "
             + " & ".join(fmt(r[(m, 'mean')], r[(m, 'std')])
                          for m in ["MAE", "RMSE", "R2"]) + " \\\\")
     lines += ["\\bottomrule", "\\end{tabular}"]
     write_tex(os.path.join(out, "tables", "ablation.tex"), "\n".join(lines),
               "Ablation on Jena, ordered by validation loss. The architecture "
-              "was selected on validation, not on test.", "tab:ablation")
+              "was selected on validation, not on test. $n$ seeds is stated "
+              "per row: the variants differ in how many were run.",
+              "tab:ablation")
     summary.append("\n[ablation, jena]\n" + g.round(4).to_string())
 
 
@@ -393,7 +404,8 @@ def fig_events(c, out):
 # --------------------------------------------------------------------------- #
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--results", nargs="*", default=["results.csv"])
+    ap.add_argument("--results", nargs="*",
+                    default=["analysis/results_clean.csv"])
     ap.add_argument("--cls", default="cls_metrics.csv")
     ap.add_argument("--xai", default="xai_metrics.csv")
     ap.add_argument("--xai_dir", default="xai")
@@ -408,7 +420,10 @@ def main():
     d = load_results(args.results)
     if d is not None:
         table_main(d, args.out, summary)
-        table_significance(d, args.out, summary)
+        # significance_*.tex is now produced by analysis/significance.py, which
+        # runs paired Diebold-Mariano tests on the per-window loss. The Welch
+        # t-test below is unpaired although the seeds are matched, so it is
+        # kept only for reference and no longer written to paper/tables/.
         table_ablation(d, args.out, summary)
         fig_horizon(d, args.out)
 
