@@ -53,8 +53,16 @@ def main():
       "— is included as a baseline explanation. Any attention mechanism that "
       "does not beat it is contributing nothing.\n")
 
-    for abl, name in [("no_revin", "Headline model (no_revin)"),
-                      ("no_entropy", "no_entropy (entropy regulariser off)")]:
+    W("**Which rows to compare.** `no_entropy` is defined relative to `full` "
+      "(RevIN **on**), not to the headline `no_revin`. The effect of the entropy "
+      "regulariser is `full` vs `no_entropy`, which differ in `lambda_ent` "
+      "alone. Setting `no_entropy` against the headline changes RevIN too and "
+      "is not a test of the regulariser — an earlier reading of this file did "
+      "exactly that and is withdrawn; see "
+      "[xai_fidelity_v2.md](analysis/xai_fidelity_v2.md).\n")
+    for abl, name in [("no_revin", "Headline model (no_revin, RevIN off)"),
+                      ("full", "full (RevIN on, entropy on) — control for no_entropy"),
+                      ("no_entropy", "no_entropy (RevIN on, entropy off)")]:
         d = d0[(d0.dataset == "jena") & (d0.ablation == abl)]
         if d.empty:
             W(f"\n---\n\n## {name}\n\n_not computed yet_\n")

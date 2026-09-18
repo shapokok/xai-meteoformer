@@ -90,24 +90,24 @@ where they go.
   report per-channel MAE/RMSE (§1) in the main table or the appendix. An
   unweighted mean over four physically incommensurable units is itself a weak
   aggregate, and saying so is a stronger position than defending it.
-- The actionable fix is a **variance calibration on RH fitted on the validation
-  split** — no retraining, inference only on existing checkpoints. If it
-  transfers from validation to test anywhere near the oracle, it closes the RMSE
-  gap outright. This is the one thing worth running next; see "Next step" at the
-  bottom.
+- A **variance calibration on RH fitted on the validation split** was proposed
+  here to test whether the oracle transfers off-test. **It was not run — the
+  calibration track was cancelled by decision.** The oracle figure above is a
+  measurement of how much of the gap is dispersion, not a method, and must not
+  be reported as an achievable result.
 
 ### One data-hygiene issue found
 
-`jena_results.csv` contains **8 rows** for `XAI-MeteoFormer/no_revin` where
-there should be 5. Seeds 0, 1, 2 are logged twice — once with
-`lambda_ent=0.0005` and once with `lambda_ent=0.01`. The metric values are
-byte-identical between the pairs, and in the `0.0005` copies `best_val` and
-`epochs_run` are swapped (`best_val=6.47`, `epochs_run=0.14`), i.e. a shifted
-header of the kind `append_row` in [src/train.py](src/train.py) was written to
-prevent. They are duplicate logs of the same three runs, not extra runs. The
-aggregates above and in the paper are unaffected (I de-duplicated on
-`model/ablation/seed`), but the CSV should be cleaned before resubmission in
-case a reviewer asks for the raw log.
+`jena_results.csv` holds **8 rows** for `XAI-MeteoFormer/no_revin` where there
+should be 5: seeds 0–2 are logged twice. **Superseded diagnosis:** this section
+originally read the duplicates as two different `lambda_ent` values with swapped
+`best_val`/`epochs_run`. That was wrong. The whole block `params … lambda_ent`
+is rotated by one column in the older rows; the apparent `lambda_ent=0.0005` is
+the **learning rate**, and both copies used `lambda_ent=0.01` — they are the same
+three runs. Full diagnosis and the repaired table:
+[results_hygiene.md](analysis/results_hygiene.md),
+[results_clean.csv](analysis/results_clean.csv). Metric columns were never
+affected.
 
 ---
 
@@ -279,38 +279,14 @@ Effect of applying that RH rescale (oracle, fitted **on test** — a measurement
 
 ---
 
-## Next step: validation-set predictions (the one thing missing)
+## Follow-up status
 
-Everything above needed only artefacts that already exist. The calibration fix
-in §7 needs one thing that does **not** exist: predictions on the **validation**
-split, so the RH rescale factor `a` can be fitted off-test.
-
-This is inference on existing checkpoints — no retraining, no change to model
-logic. `evaluate()` in [src/train.py](src/train.py#L155) already returns
-`(metrics, pred, true)`; it just is never called on `val_dl`, and the val loop
-only accumulates a scalar loss. A separate read-only script in `analysis/` can
-do it without touching `src/`:
-
-```python
-# analysis/dump_val_preds.py  (not yet written — inference only)
-train_ds, val_ds, _ = build_splits("data/processed", "jena",
-                                   seq_len=96, pred_len=24, seed=seed)
-model.load_state_dict(torch.load(f"checkpoints/{tag}.pt", map_location=dev))
-_, pred, true = evaluate(model, DataLoader(val_ds, batch_size=64, shuffle=False),
-                         dev, train_ds.mu, train_ds.sigma,
-                         train_ds.target_idx, train_ds.target_names)
-np.save(f"analysis/val_preds/{tag}_valpred.npy", pred.astype(np.float32))
-```
-
-Two caveats that decide whether this is worth running:
-
-1. `build_splits` is seed-independent for `missing_rate=0`, and `shuffle=False`
-   on the loader, so the val split is identical across models and seeds — one
-   `jena_val_true.npy` suffices, same as the test file.
-2. The 5 `XAI-MeteoFormer_jena_no_revin_s*.pt` checkpoints must be present
-   locally. They are (see inventory), so this runs on CPU here; ~13 k val
-   windows is a few minutes, no GPU needed.
-
-If `a` fitted on validation lands near 0.86, the RMSE result in the paper flips
-honestly. If it does not transfer, that is also worth knowing before building an
-argument on it.
+- The per-channel finding (we win T, lose RH; the aggregate is dominated by RH)
+  was later confirmed with paired Diebold–Mariano tests on **both** datasets:
+  [significance.md](analysis/significance.md).
+- Validation-set predictions were produced for all 138 checkpoints
+  (`predictions_val/`, [dump_val_preds.py](analysis/dump_val_preds.py)) and used
+  for the validation-selected frost threshold in
+  [frost_events.md](analysis/frost_events.md).
+- The RH variance calibration was **cancelled**; nothing in this file should be
+  read as a result of it.

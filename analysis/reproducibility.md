@@ -113,9 +113,11 @@ No hyperparameter search was run for any model — see
   `(model, dataset, ablation, seed, …)` already present, so a session that dies
   at hour 12 loses one run rather than the batch.
 - **Post-hoc analysis in `analysis/`**: Apple Silicon, macOS 25.6, CPU and MPS.
-  Note that MPS raises an internal Metal assertion on the models that use
-  `Tensor.unfold` for patching (PatchTST and XAI-MeteoFormer), so those were run
-  on CPU.
+  MPS raises an internal Metal assertion on `Tensor.unfold`, used for patching
+  by PatchTST and XAI-MeteoFormer. The analysis harnesses replace it at runtime
+  with an equivalent stack of slices ([mps_unfold_fix.py](analysis/mps_unfold_fix.py);
+  outputs agree with CPU to ~2e-6, gradients to ~6e-7 relative), so everything
+  now runs on MPS. `src/` is not modified.
 - **Versions** (the local analysis environment, `.venv`):
 
   | Package | Version |
@@ -130,17 +132,19 @@ No hyperparameter search was run for any model — see
   `shap` is **not** a dependency: GradientSHAP is implemented directly in
   [src/xai.py](src/xai.py) with torch autograd.
 
-  The Kaggle training environment's exact versions are **not recorded anywhere
-  in the repository** — no `requirements.txt`, no `pip freeze`, no environment
-  capture in [notebooks/kaggle_train.ipynb](notebooks/kaggle_train.ipynb). This
-  is a genuine reproducibility gap and should be fixed before resubmission by
-  adding a `pip freeze` cell to the notebook and committing the output.
+  **Kaggle environment: captured going forward (Minor #8, closed).** Both
+  notebooks now write `outputs/requirements_frozen.txt` (`pip freeze`) and
+  `outputs/environment.json` (Python, torch, CUDA, cuDNN, GPU, TSLib commit) at
+  the start of every run. The runs that produced the *published* results predate
+  this and their environment was not captured; state that in the paper.
 
 - **Baselines**: [Time-Series-Library](https://github.com/thuml/Time-Series-Library),
   vendored in `Time-Series-Library/`. The adapter patches
   `layers/SelfAttention_Family.py` at import time to make the
   `reformer_pytorch` import optional; no baseline used here needs it.
-  **The exact TSLib commit is not pinned** — another gap worth closing.
+  **TSLib is pinned** to `4e938a1767106324dd753b2a44832bf870a0252e` in both
+  notebooks (a shallow fetch of that one commit, plus an assert that fails the
+  run if it drifts).
 
 ## 7. Compute budget
 

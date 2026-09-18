@@ -149,5 +149,6 @@ the per-channel result in [analysis/error_decomposition.md](analysis/error_decom
 
 Implementation note: Tier A needs a small adapter change, not a training change
 — wrap the baseline core in the existing `RevIN` the way `SimpleRNN` already
-does, gated by a new `--baseline_revin` flag, so `full` and `revin` variants of
-each baseline are separate runs under the existing resume key.
+does, gated by a new flag — implemented as `--norm_variant {on,off}`, see
+[norm_symmetry_runs.md](analysis/norm_symmetry_runs.md) — so both variants of
+each baseline are separate runs under the resume key.
