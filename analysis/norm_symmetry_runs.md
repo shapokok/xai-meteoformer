@@ -43,10 +43,23 @@ the proof — RevIN adds exactly `2 × n_channels` affine parameters (38 on Jena
 | DLinear | **4 656** | 4 694 | **4 656** → historically without |
 | PatchTST | 1 657 880 | 1 657 880 (no-op) | 1 657 880 |
 
-So `historical = "on" if model == "LSTM" else "off"`, which is what the tagging
-logic in [src/train.py](src/train.py) now encodes: only the *new* variant gets a
-`_norm{on,off}` suffix, so **every existing checkpoint keeps its name and stays
-loadable**.
+So the historical configuration is "on" for LSTM and "off" for every other
+baseline. It lives in one place, `historical_norm_variant()` in
+[src/baselines/tslib_adapter.py](src/baselines/tslib_adapter.py), and it is
+the **default**: omitting `--norm_variant` (or passing `norm_variant=None` to
+`build_baseline`) reproduces the published configuration, so every existing
+checkpoint loads without any caller having to know the history. Only an
+explicit variant that differs from it gets a `_norm{on,off}` suffix in the
+checkpoint tag.
+
+> Correction. The first version of this flag defaulted to `"off"`, which for
+> LSTM means *without* RevIN — not the published configuration. Callers that
+> did not pass the flag (`src/xai.py`) then built an LSTM that could not load
+> its own checkpoint. Fixed by making the default the historical
+> configuration; verified that LSTM, Crossformer and DLinear load their
+> existing checkpoints under the default, and that the five configurations
+> `LSTM{default,off}`, `DLinear{default,on}`, `Crossformer 256x512` produce
+> five distinct checkpoint tags and resume keys.
 
 Verified end to end by re-running test inference on existing checkpoints with
 the patched code:

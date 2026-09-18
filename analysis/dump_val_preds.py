@@ -67,11 +67,9 @@ def build(model_name, dataset, ablation, train_ds, device, tslib_path):
         # Historical configuration of the existing checkpoints: LSTM was
         # trained with our RevIN, every other baseline without any per-window
         # normalization of its own. Reproduced exactly so the weights load.
-        historical = "on" if model_name in ("LSTM", "GRU") else "off"
         model = build_baseline(model_name, args, train_ds.n_channels,
                                train_ds.target_idx, train_ds.target_names,
-                               tslib_path=tslib_path,
-                               norm_variant=historical)
+                               tslib_path=tslib_path)   # historical default
     return model.to(device)
 
 

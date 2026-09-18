@@ -202,7 +202,11 @@ def run_one(args, seed: int) -> None:
     lam_key = (0.0 if (args.model_name != "XAI-MeteoFormer"
                        or args.ablation == "no_entropy")
                else args.lambda_ent)
-    nv = "off" if args.model_name == "XAI-MeteoFormer" else args.norm_variant
+    from baselines.tslib_adapter import historical_norm_variant
+    if args.model_name == "XAI-MeteoFormer":
+        nv = "off"
+    else:
+        nv = args.norm_variant or historical_norm_variant(args.model_name)
     # Width is part of the resume key: a 256x1024 Crossformer must not be
     # skipped because a 128x128 one is already in the table.
     if args.model_name == "XAI-MeteoFormer" or args.bl_d_model is None:
@@ -254,7 +258,7 @@ def run_one(args, seed: int) -> None:
         model = build_baseline(
             args.model_name, args, train_ds.n_channels,
             train_ds.target_idx, train_ds.target_names,
-            tslib_path=args.tslib_path, norm_variant=args.norm_variant,
+            tslib_path=args.tslib_path, norm_variant=nv,
             width=width,
         ).to(device)
 
@@ -284,9 +288,9 @@ def run_one(args, seed: int) -> None:
     # LSTM historically ran with RevIN, every other baseline without it, so
     # those combinations keep the old tag and the existing checkpoints stay
     # valid. Only the newly added variant gets a suffix.
-    historical = "on" if args.model_name == "LSTM" else "off"
-    if args.model_name != "XAI-MeteoFormer" and args.norm_variant != historical:
-        suffix += f"_norm{args.norm_variant}"
+    if (args.model_name != "XAI-MeteoFormer"
+            and nv != historical_norm_variant(args.model_name)):
+        suffix += f"_norm{nv}"
     if width_tag != "default":
         suffix += f"_w{width_tag}"
     tag = f"{args.model_name}_{args.dataset}_{args.ablation}{suffix}_s{seed}"
@@ -381,12 +385,14 @@ def main():
                         "XAI-MeteoFormer.")
     p.add_argument("--bl_d_ff", type=int, default=None,
                    help="override a BASELINE's d_ff; defaults to 4*bl_d_model")
-    p.add_argument("--norm_variant", default="off", choices=["on", "off"],
-                   help="per-window normalization for BASELINES only: 'off' "
-                        "runs each model exactly as its source defines it "
-                        "(and LSTM without our RevIN); 'on' adds the same "
-                        "RevIN the proposed model uses to the baselines that "
-                        "have none. No effect on self-normalizing baselines.")
+    p.add_argument("--norm_variant", default=None, choices=["on", "off"],
+                   help="per-window normalization for BASELINES only. Omitted "
+                        "= the historical configuration of the published runs "
+                        "(LSTM with our RevIN, TSLib baselines as their source "
+                        "defines them). 'off' = LSTM without RevIN (textbook). "
+                        "'on' = add the same RevIN the proposed model uses to "
+                        "the baselines that have none. No effect on "
+                        "self-normalizing baselines.")
     p.add_argument("--models", nargs="*", default=None,
                    help="run several models in one go, e.g. --models DLinear PatchTST")
     p.add_argument("--tslib_path", default=None,

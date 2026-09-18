@@ -216,6 +216,15 @@ UNNORMALIZED = {"DLinear", "Crossformer", "Transformer", "Informer",
 SELF_NORMALIZING = {"PatchTST", "iTransformer", "TimesNet", "TFT"}
 
 
+def historical_norm_variant(name: str) -> str:
+    """The normalization configuration the published runs used.
+
+    LSTM/GRU were trained with our RevIN; every other baseline without any
+    normalization of our own. This is what existing checkpoints expect.
+    """
+    return "on" if name in LOCAL_MODELS else "off"
+
+
 class BaselineWrapper(nn.Module):
     """Presents any baseline through the XAI-MeteoFormer output contract."""
 
@@ -281,16 +290,19 @@ class BaselineWrapper(nn.Module):
 def build_baseline(name: str, args, n_channels: int,
                    target_idx: List[int], target_names: List[str],
                    tslib_path: Optional[str] = None,
-                   norm_variant: str = "off",
+                   norm_variant: Optional[str] = None,
                    width: Optional[tuple] = None) -> nn.Module:
     """norm_variant controls ONLY the per-window normalization.
 
-      "off" - the configuration used for every result up to now: each model
-              runs exactly as its source code defines it. For the models in
-              UNNORMALIZED that means no instance normalization at all; for
-              LSTM it means no RevIN, i.e. the textbook baseline.
+      None  - (default) the HISTORICAL configuration every published result
+              and every existing checkpoint was trained in: LSTM/GRU with our
+              RevIN, every TSLib baseline exactly as its source defines it.
+              Existing checkpoints load under this default.
+      "off" - no per-window normalization added by us: TSLib baselines as
+              their source defines them, LSTM/GRU WITHOUT RevIN, i.e. the
+              textbook RNN baseline.
       "on"  - adds the same RevIN layer the proposed model uses to the models
-              in UNNORMALIZED, and keeps it for LSTM.
+              in UNNORMALIZED, and keeps it for LSTM/GRU.
 
     width, if given, is (d_model, d_ff) and overrides BOTH the shared config
     and any entry in MODEL_OVERRIDES for this model. MODEL_OVERRIDES was
@@ -302,6 +314,8 @@ def build_baseline(name: str, args, n_channels: int,
     removed here, because stripping it would produce a model their authors
     never proposed. This is stated in analysis/tuning_symmetry_audit.md.
     """
+    if norm_variant is None:
+        norm_variant = historical_norm_variant(name)
     assert norm_variant in ("on", "off"), norm_variant
     temp_pos = target_names.index("T") if "T" in target_names else 0
 
