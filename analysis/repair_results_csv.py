@@ -7,8 +7,7 @@ Two defects, both diagnosed in analysis/results_hygiene.md:
    params..lambda_ent: the value sitting in `params` is really
    `lambda_ent`, and every other field in that block is one column to the
    right of where it belongs. Detectable without ambiguity because
-   `seq_len` is 96 in every run ever made, and reads as the epoch count
-   in a rotated row.
+   a rotated row carries d_model in `n_layers` and n_layers in `lr`.
 2. The same runs are logged twice, once in each layout.
 
 The metric columns (MAE onward) are NOT affected -- verified against
@@ -33,16 +32,23 @@ EXTRA_DEFAULTS = {"norm_variant": None, "width": "default",
                   "bl_d_model": None, "bl_d_ff": None}
 
 
+def is_shifted(df: pd.DataFrame) -> pd.Series:
+    """In a rotated row n_layers holds d_model (>=64) and lr holds n_layers
+    (>=1); a real row has n_layers<=16 and lr<0.1. Not seq_len: the window
+    sweep has genuine rows at seq_len 24/48/192."""
+    return (df["n_layers"].astype(float) > 16) | (df["lr"].astype(float) > 0.1)
+
+
 def repair(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     df[BLOCK] = df[BLOCK].astype(float)
-    shifted = (df["seq_len"] != 96).values
+    shifted = is_shifted(df).values
     if shifted.any():
         # rotate the block one position left: params <- train_time_s, ...,
         # lr <- lambda_ent, and the displaced first value becomes lambda_ent
         vals = df.loc[shifted, BLOCK].values
         df.loc[shifted, BLOCK] = np.concatenate([vals[:, 1:], vals[:, :1]], axis=1)
-    assert (df["seq_len"] == 96).all(), "repair failed: seq_len still off"
+    assert not is_shifted(df).any(), "repair failed: rows still shifted"
     return df
 
 
@@ -70,7 +76,7 @@ def main():
         if not os.path.exists(os.path.join(ROOT, f)):
             continue
         raw = pd.read_csv(os.path.join(ROOT, f))
-        n_shift = int((raw["seq_len"] != 96).sum())
+        n_shift = int(is_shifted(raw).sum())
         fixed = backfill(repair(raw))
         before = len(fixed)
         # exact duplicates of the same run; keep the first

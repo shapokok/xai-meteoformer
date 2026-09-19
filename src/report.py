@@ -50,9 +50,10 @@ def load_results(paths):
         d = pd.read_csv(p)
         if set(SHIFT_HEAD) <= set(d.columns):
             d[SHIFT_HEAD] = d[SHIFT_HEAD].astype(float)
-            # seq_len is 96 in every run ever made; in a rotated row that
-            # cell holds the epoch count, which makes the test exact.
-            sh = d["seq_len"] != 96
+            # In a rotated row n_layers holds d_model (>=64) and lr holds
+            # n_layers (>=1); a real row has n_layers<=16 and lr<0.1. Not
+            # seq_len: the window sweep has genuine rows at 24/48/192.
+            sh = (d["n_layers"] > 16) | (d["lr"] > 0.1)
             if sh.any():
                 d.loc[sh, SHIFT_ACT] = d.loc[sh, SHIFT_HEAD].values
                 print(f"  {os.path.basename(p)}: repaired {int(sh.sum())} rows")
@@ -60,12 +61,38 @@ def load_results(paths):
     if not frames:
         return None
     d = pd.concat(frames, ignore_index=True)
-    # duplicates arise when a resume key failed to match; keep the last write
+    # Older CSVs predate norm_variant/width; give those rows the configuration
+    # they were trained in, so they are not confused with the new variants.
+    for c, v in (("norm_variant", None), ("width", "default")):
+        if c not in d.columns:
+            d[c] = v
+    d["norm_variant"] = d["norm_variant"].fillna(
+        pd.Series(historical_norm(d["model"]), index=d.index))
+    d["width"] = d["width"].fillna("default")
+    # duplicates arise when a resume key failed to match; keep the last write.
+    # norm_variant and width are part of a run's identity: without them a
+    # 256x1024 Crossformer or a baseline with added RevIN would silently
+    # replace the published run of the same model and seed.
     before = len(d)
-    d = d.drop_duplicates(["model", "dataset", "ablation", "seed"], keep="last")
+    d = d.drop_duplicates(["model", "dataset", "ablation", "seed",
+                           "norm_variant", "width"], keep="last")
     if len(d) < before:
         print(f"  dropped {before - len(d)} duplicate runs")
     return d
+
+
+def historical_norm(models):
+    """Normalization the published runs used: our RevIN on LSTM/GRU only."""
+    return np.where(pd.Series(models).isin(["LSTM", "GRU"]), "on", "off")
+
+
+def published(d):
+    """Only the configuration the main comparison reports: default width and
+    the historical normalization. Width and normalization variants are
+    reported in their own analyses, not mixed into the main table."""
+    keep = (d["width"].eq("default") &
+            d["norm_variant"].eq(historical_norm(d["model"])))
+    return d[keep.values]
 
 
 def display_name(row):
@@ -175,7 +202,11 @@ def table_significance(d, out, summary):
 
 
 def table_ablation(d, out, summary):
-    sub = d[(d.model == PROPOSED) & (d.dataset == "jena")]
+    """Component ablations taken from `full` (RevIN on): the appendix table.
+    The ablations from the headline no_revin configuration are in
+    table_ablation_norevin."""
+    sub = d[(d.model == PROPOSED) & (d.dataset == "jena") &
+            ~d.ablation.str.contains("+", regex=False)]
     if sub.ablation.nunique() < 3:
         print("  ablation: not enough variants, skipped")
         return
@@ -198,6 +229,56 @@ def table_ablation(d, out, summary):
               "per row: the variants differ in how many were run.",
               "tab:ablation")
     summary.append("\n[ablation, jena]\n" + g.round(4).to_string())
+
+
+# Removing var_attn makes the attention constant, so the entropy term has no
+# gradient path: that row removes both components at once.
+NOREVIN_ROWS = [("no_revin", "MeteoFormer (no RevIN, headline)"),
+                ("no_revin+no_multiscale", "$-$ multi-scale"),
+                ("no_revin+no_var_attn", "$-$ variable attention (and entropy term)"),
+                ("no_revin+no_temp_attn", "$-$ temporal attention"),
+                ("no_revin+no_fusion", "$-$ fusion gate"),
+                ("no_revin+no_entropy", "$-$ entropy term"),
+                ("no_revin+no_cls", "$-$ event head")]
+
+
+def table_ablation_norevin(d, out, summary):
+    """Component ablations from the headline configuration, both datasets."""
+    sub = d[(d.model == PROPOSED) & d.ablation.isin([a for a, _ in NOREVIN_ROWS])]
+    if sub.ablation.nunique() < 2:
+        print("  ablation_norevin: no composite ablations yet, skipped")
+        return
+    lines = ["\\begin{tabular}{llcccc}", "\\toprule",
+             "Dataset & Variant & $n$ & MAE & $\\Delta$MAE & $R^2$ \\\\",
+             "\\midrule"]
+    for ds in ("jena", "beijing_aotizhongxin"):
+        s = sub[sub.dataset == ds]
+        if s.empty:
+            continue
+        base = s[s.ablation == "no_revin"].MAE.mean()
+        name = "Jena" if ds == "jena" else "Beijing"
+        for abl, label in NOREVIN_ROWS:
+            g = s[s.ablation == abl]
+            if g.empty:
+                lines.append(f"{name} & {label} & 0 & -- & -- & -- \\\\")
+                continue
+            dm = "" if abl == "no_revin" else f"{g.MAE.mean() - base:+.3f}"
+            lines.append(f"{name} & {label} & {g.seed.nunique()} & "
+                         f"{fmt(g.MAE.mean(), g.MAE.std())} & {dm} & "
+                         f"{fmt(g.R2.mean(), g.R2.std())} \\\\")
+            name = ""
+        lines.append("\\midrule")
+    lines[-1] = "\\bottomrule"
+    lines.append("\\end{tabular}")
+    write_tex(os.path.join(out, "tables", "ablation_norevin.tex"), "\n".join(lines),
+              "Ablation from the headline configuration (no RevIN): each row "
+              "removes one component, mean $\\pm$ s.d. over seeds. $\\Delta$MAE "
+              "is relative to the headline model; positive means the component "
+              "helps. Removing variable attention also removes the entropy "
+              "term, which has no gradient once the attention is constant.",
+              "tab:ablation_norevin")
+    g = sub.groupby(["dataset", "ablation"])[["MAE", "RMSE", "R2"]].agg(["mean", "std"])
+    summary.append("\n[ablation from no_revin]\n" + g.round(4).to_string())
 
 
 def table_fidelity(x, out, summary):
@@ -419,20 +500,21 @@ def main():
     print("results:")
     d = load_results(args.results)
     if d is not None:
-        table_main(d, args.out, summary)
+        table_main(published(d), args.out, summary)
         # significance_*.tex is now produced by analysis/significance.py, which
         # runs paired Diebold-Mariano tests on the per-window loss. The Welch
         # t-test below is unpaired although the seeds are matched, so it is
         # kept only for reference and no longer written to paper/tables/.
         table_ablation(d, args.out, summary)
-        fig_horizon(d, args.out)
+        table_ablation_norevin(d, args.out, summary)
+        fig_horizon(published(d), args.out)
 
     x = pd.read_csv(args.xai) if os.path.exists(args.xai) else None
     if x is not None:
         print("xai:")
         table_fidelity(x, args.out, summary)
         if d is not None:
-            fig_accuracy_vs_fidelity(d, x, args.out)
+            fig_accuracy_vs_fidelity(published(d), x, args.out)
     fig_fidelity_curves(args.xai_dir, args.out)
     fig_importance_heatmap(args.xai_dir, args.out)
 

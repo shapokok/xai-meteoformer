@@ -63,6 +63,19 @@ def main():
       "about 8 GB of VRAM, but training ran on a 16 GB T4, so the cap was "
       "inherited rather than required. Measured peak memory at 256x1024, "
       "batch 64 is in `analysis/crossformer_probe.json`.\n")
+    probe_f = os.path.join(ROOT, "analysis", "crossformer_probe.json")
+    env_f = os.path.join(ROOT, "analysis", "environment.json")
+    if os.path.exists(probe_f):
+        import json
+        pr = json.load(open(probe_f))
+        gpu = json.load(open(env_f)).get("gpu", "?") if os.path.exists(env_f) else "?"
+        W(f"**Training setup of the 256-wide runs:** batch size **64** for both "
+          f"widths (the `CROSSFORMER_BATCH` default; batch is in neither the "
+          f"results row nor the checkpoint tag), {gpu}, one process per GPU. "
+          f"Memory probe at 256x1024, one epoch: peak "
+          f"{pr['64']['peak_MiB']:.0f} MiB at batch 64 and "
+          f"{pr['128']['peak_MiB']:.0f} MiB at batch 128, so memory did not "
+          f"constrain the choice.\n")
 
     W("## Accuracy by capacity\n")
     W("| Configuration | params | n seeds | MAE | RMSE | R² |")
@@ -119,7 +132,7 @@ def main():
                 md_, _ = cell[kind]
                 pa = adj[kind][i]
                 cs += [f"{md_:+.4f}{'*' if pa < 0.05 else ''}",
-                       f"{pa:.3g}"]
+                       "<1e-15" if pa < 1e-15 else f"{pa:.3g}"]
             W(f"| {label} | " + " | ".join(cs) + " |")
             i += 1
         W("")
@@ -127,6 +140,21 @@ def main():
           "within each column. L1 = absolute loss, L2 = squared loss; the "
           "per-window loss is averaged over seeds, not the predictions.\n")
 
+    W("## Result\n")
+    stats_ = {}
+    for model, abl, width, label in configs:
+        g = d[(d.model == model) & (d.ablation == abl) & (d.width == width)]
+        if not g.empty:
+            stats_[label] = g.MAE.mean()
+    base = stats_.get("Crossformer 128x128")
+    ours_m = stats_.get("MeteoFormer (ours)")
+    if base is not None and ours_m is not None:
+        for label in ("Crossformer 256x512", "Crossformer 256x1024"):
+            if label in stats_:
+                W(f"- {label}: MAE {stats_[label]:.3f} vs {base:.3f} at 128x128 "
+                  f"({stats_[label] - base:+.3f}); vs ours {ours_m:.3f} "
+                  f"({ours_m - stats_[label]:+.3f}).")
+        W("")
     W("## How to read this\n")
     W("If Crossformer improves with width, the published comparison "
       "under-provisioned it and the paper must say so — reporting the capped "
