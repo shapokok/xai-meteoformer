@@ -12,12 +12,12 @@ Reports, per dataset:
   - Diebold-Mariano of the headline model against the SELECTED variant,
     reusing analysis/significance.py, Holm within the family.
 
-Does NOT change paper/tables/main_*.tex: whether the selected variants go
-into the main table is a decision for the authors, because frost_events,
-missing_robustness and block_missing load the historical checkpoints by tag
-and would have to be re-run for the switched variants.
+The authors adopted the rule for the main table: paper/tables/main_*.tex
+(src/report.py) and every downstream analysis use the selected variants
+through analysis/selection.py; the historical configuration is in
+paper/tables/main_historical_*.tex.
 
-Outputs -> analysis/norm_selection.md, paper/tables/main_normselected_{ds}.tex
+Outputs -> analysis/norm_selection.md
 """
 
 import os
@@ -127,7 +127,6 @@ def main():
                 raw.append(p)
             for m, pa in zip(SWEPT, sig.holm(raw)):
                 res[(m, kind, "p")] = pa
-        tex = []
         for m in SWEPT:
             x = d[(d.model == m) & (d.dataset == ds) & (d.ablation == "full") &
                   (d.norm_variant == sel[m])]
@@ -141,28 +140,11 @@ def main():
                     cells.append("_missing_")
             W(f"| {m} (`{sel[m]}`) | {x.MAE.mean():.3f} | "
               f"{ours_rows.MAE.mean() - x.MAE.mean():+.3f} | " + " | ".join(cells) + " |")
-            tex.append((m, sel[m], x))
         W("")
         W(f"Headline MAE: {ours_rows.MAE.mean():.3f} ± {ours_rows.MAE.std():.3f}. "
           "Negative Δ favours the headline model. `*` = p<0.05 after Holm over "
           "the five baselines within each loss.\n")
 
-        # a main-table variant with the selected baselines, for the authors to choose
-        out = os.path.join(ROOT, "paper", "tables")
-        lines = ["\\begin{tabular}{lcccc}", "\\toprule",
-                 "Model & Norm. & MAE & RMSE & $R^2$ \\\\", "\\midrule"]
-        rows = [("\\textbf{MeteoFormer}", "--", ours_rows)] + \
-               [(m, nv, x) for m, nv, x in tex]
-        for name, nv, x in sorted(rows, key=lambda r: r[2].MAE.mean()):
-            lines.append(f"{name} & {nv} & " + " & ".join(
-                f"{x[c].mean():.3f} $\\pm$ {x[c].std():.3f}" for c in ("MAE", "RMSE", "R2")) + " \\\\")
-        lines += ["\\bottomrule", "\\end{tabular}"]
-        with open(os.path.join(out, f"main_normselected_{ds}.tex"), "w") as f:
-            f.write("\\begin{table}[H]\n\\caption{Baselines whose normalization "
-                    f"was swept, on {ds}, each in the variant selected by mean "
-                    "validation loss over 5 seeds (the rule that selected no "
-                    "RevIN for our model). Mean $\\pm$ s.d.}\n"
-                    f"\\label{{tab:normsel_{ds}}}\n" + "\n".join(lines) + "\n\\end{table}\n")
 
     if missing:
         W("## Missing\n")

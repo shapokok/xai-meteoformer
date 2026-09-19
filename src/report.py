@@ -95,6 +95,25 @@ def published(d):
     return d[keep.values]
 
 
+def selected(d):
+    """The configuration the main table reports since the resubmission:
+    default width and, per (baseline, dataset), the normalization variant
+    with the lower mean VALIDATION loss over the seeds -- the rule fixed in
+    analysis/norm_symmetry_runs.md, the same one that picked no_revin for
+    our model. analysis/selection.py applies the identical rule for the
+    analyses that load checkpoints."""
+    d = d[d["width"].eq("default")]
+    keep = np.ones(len(d), dtype=bool)
+    base = d[(d.model != PROPOSED) & (d.ablation == "full")]
+    for (m, ds), g in base.groupby(["model", "dataset"]):
+        v = g.groupby("norm_variant").best_val.mean()
+        pick = v.idxmin() if len(v) > 1 else historical_norm([m])[0]
+        drop = ((d.model == m) & (d.dataset == ds) & (d.ablation == "full")
+                & (d.norm_variant != pick)).values
+        keep &= ~drop
+    return d[keep]
+
+
 def display_name(row):
     if row["model"] != PROPOSED:
         return row["model"]
@@ -115,12 +134,15 @@ def write_tex(path, body, caption, label):
 
 
 # --------------------------------------------------------------------------- #
-def table_main(d, out, summary):
+def table_main(d, out, summary, stem="main", note=""):
     """Accuracy per dataset, proposed model vs every baseline."""
     for ds in sorted(d.dataset.unique()):
         sub = d[(d.dataset == ds) & (d.ablation.isin(["full", "no_revin"]))].copy()
         sub = sub[~((sub.model == PROPOSED) & (sub.ablation == "full"))]
         sub["name"] = sub.apply(display_name, axis=1)
+        # dagger: this baseline runs with a RevIN layer added by us
+        with_revin = set(sub[(sub.model != PROPOSED) &
+                             (sub.norm_variant == "on")]["name"])
         g = sub.groupby("name")[["MAE", "RMSE", "R2"]].agg(["mean", "std"])
         g = g.sort_values(("MAE", "mean"))
 
@@ -136,12 +158,15 @@ def table_main(d, out, summary):
                     v = "\\textbf{" + v + "}"
                 cells.append(v)
             nm = "\\textbf{" + name + "}" if name == LABEL else name
+            if name in with_revin:
+                nm += "$^{\\dagger}$"
             lines += [f"{nm} & " + " & ".join(cells) + " \\\\"]
         lines += ["\\bottomrule", "\\end{tabular}"]
-        write_tex(os.path.join(out, "tables", f"main_{ds}.tex"), "\n".join(lines),
+        write_tex(os.path.join(out, "tables", f"{stem}_{ds}.tex"), "\n".join(lines),
                   f"Forecasting accuracy on {ds}, mean $\\pm$ s.d. over 5 seeds. "
-                  f"Best per column in bold.", f"tab:main_{ds}")
-        summary.append(f"\n[{ds}] accuracy\n" + g.round(4).to_string())
+                  f"Best per column in bold. $^{{\\dagger}}$: with a RevIN layer "
+                  f"added to the baseline. {note}", f"tab:{stem}_{ds}")
+        summary.append(f"\n[{ds}] accuracy ({stem})\n" + g.round(4).to_string())
 
 
 def table_significance(d, out, summary):
@@ -491,6 +516,9 @@ def main():
     ap.add_argument("--xai", default="xai_metrics.csv")
     ap.add_argument("--xai_dir", default="xai")
     ap.add_argument("--out", default="paper")
+    ap.add_argument("--legacy_xai", action="store_true",
+                    help="also write the superseded fidelity/event tables and "
+                         "figures from xai_metrics.csv / cls_metrics.csv")
     args = ap.parse_args()
 
     os.makedirs(os.path.join(args.out, "tables"), exist_ok=True)
@@ -500,29 +528,40 @@ def main():
     print("results:")
     d = load_results(args.results)
     if d is not None:
-        table_main(published(d), args.out, summary)
+        table_main(selected(d), args.out, summary, "main",
+                   "Each baseline's normalization is the variant with the lower "
+                   "mean validation loss, the rule that selected no RevIN for "
+                   "our model.")
+        table_main(published(d), args.out, summary, "main_historical",
+                   "Appendix: every baseline in its historical configuration "
+                   "(as its source defines it; LSTM with RevIN).")
         # significance_*.tex is now produced by analysis/significance.py, which
         # runs paired Diebold-Mariano tests on the per-window loss. The Welch
         # t-test below is unpaired although the seeds are matched, so it is
         # kept only for reference and no longer written to paper/tables/.
         table_ablation(d, args.out, summary)
         table_ablation_norevin(d, args.out, summary)
-        fig_horizon(published(d), args.out)
+        fig_horizon(selected(d), args.out)
 
-    x = pd.read_csv(args.xai) if os.path.exists(args.xai) else None
-    if x is not None:
-        print("xai:")
-        table_fidelity(x, args.out, summary)
-        if d is not None:
-            fig_accuracy_vs_fidelity(published(d), x, args.out)
-    fig_fidelity_curves(args.xai_dir, args.out)
-    fig_importance_heatmap(args.xai_dir, args.out)
-
-    c = pd.read_csv(args.cls) if os.path.exists(args.cls) else None
-    if c is not None:
-        print("events:")
-        table_cls(c, args.out, summary)
-        fig_events(c, args.out)
+    # Fidelity and event tables have their own producers now and must not be
+    # overwritten from the old single-seed xai_metrics.csv / cls_metrics.csv:
+    #   paper/tables/fidelity_*.tex  <- analysis/xai_fidelity_v2.py
+    #   paper/tables/events_*.tex    <- analysis/frost_events.py
+    # Pass --legacy_xai to regenerate the old versions for reference.
+    if args.legacy_xai:
+        x = pd.read_csv(args.xai) if os.path.exists(args.xai) else None
+        if x is not None:
+            print("xai (legacy):")
+            table_fidelity(x, args.out, summary)
+            if d is not None:
+                fig_accuracy_vs_fidelity(published(d), x, args.out)
+        fig_fidelity_curves(args.xai_dir, args.out)
+        fig_importance_heatmap(args.xai_dir, args.out)
+        c = pd.read_csv(args.cls) if os.path.exists(args.cls) else None
+        if c is not None:
+            print("events (legacy):")
+            table_cls(c, args.out, summary)
+            fig_events(c, args.out)
 
     with open(os.path.join(args.out, "summary.txt"), "w") as f:
         f.write("\n".join(summary))

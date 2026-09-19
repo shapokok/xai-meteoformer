@@ -30,6 +30,7 @@ import os
 
 import numpy as np
 import pandas as pd
+import sys
 from scipy import stats
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -39,6 +40,21 @@ DATASETS = ["jena", "beijing_aotizhongxin"]
 OURS = ("XAI-MeteoFormer", "no_revin")
 LABEL = "MeteoFormer"
 SEEDS = range(5)
+
+# Baseline normalization: "selected" (main text; the variant with the lower
+# mean validation loss, analysis/selection.py) or "historical" (appendix).
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from selection import selected_suffix  # noqa: E402
+MODE = "historical" if "--historical" in sys.argv else "selected"
+TAG = "" if MODE == "selected" else "_historical"
+NORM_NOTE = ("each in the normalization variant with the lower mean validation "
+             "loss (analysis/selection.py)." if MODE == "selected" else
+             "each in its historical normalization (appendix).")
+
+
+def bl_abl(model, ds):
+    """ablation part of a baseline's tag, including the normalization suffix"""
+    return "full" + (selected_suffix(model, ds) if MODE == "selected" else "")
 
 
 # --------------------------------------------------------------------------- #
@@ -168,7 +184,7 @@ def write_tex_tables(dm):
             a2, p2 = cell(b, "sq", "agg")
             lines.append(f"{b} & {a1} & {p1} & {a2} & {p2} \\\\")
         lines += ["\\bottomrule", "\\end{tabular}"]
-        write_tex(os.path.join(out, f"significance_{ds}.tex"), "\n".join(lines),
+        write_tex(os.path.join(out, f"significance{TAG}_{ds}.tex"), "\n".join(lines),
                   f"Diebold--Mariano test of {LABEL} against each baseline on "
                   f"{ds}, on the per-window loss differential with a "
                   f"Newey--West HAC variance (automatic lag) and the "
@@ -176,7 +192,7 @@ def write_tex_tables(dm):
                   f"loss, $L_2$ = squared loss; the per-window loss is averaged "
                   f"over the 5 seeds. Negative $\\Delta$ favours {LABEL}. "
                   f"$^{{*}}$: $p<0.05$ after Holm correction within each "
-                  f"column.", f"tab:sig_{ds}")
+                  f"column. Baselines: {NORM_NOTE}", f"tab:sig{TAG}_{ds}")
 
         lines = ["\\begin{tabular}{lcccccccc}", "\\toprule",
                  "& \\multicolumn{4}{c}{$\\Delta L_1$} & "
@@ -189,13 +205,13 @@ def write_tex_tables(dm):
                  [cell(b, "sq", n)[0] for n in NAMES]
             lines.append(f"{b} & " + " & ".join(cs) + " \\\\")
         lines += ["\\bottomrule", "\\end{tabular}"]
-        write_tex(os.path.join(out, f"significance_channels_{ds}.tex"),
+        write_tex(os.path.join(out, f"significance_channels{TAG}_{ds}.tex"),
                   "\n".join(lines),
                   f"Diebold--Mariano differential per target channel on {ds}. "
                   f"Negative favours {LABEL}. $^{{*}}$: $p<0.05$ after Holm "
                   f"correction within each column. The sign flips between "
                   f"temperature and relative humidity.",
-                  f"tab:sig_ch_{ds}")
+                  f"tab:sig_ch{TAG}_{ds}")
 
 
 def write_tex(path, body, caption, label):
@@ -216,6 +232,8 @@ def main():
       "(`scipy.stats.ttest_ind`) although the seeds are matched across models, "
       "which is both less powerful and not the right null.\n")
     W("**Negative Δ favours " + LABEL + " throughout.**\n")
+    W(f"**Baselines: {NORM_NOTE}** Run with `--historical` for the appendix "
+      "version against every baseline's historical normalization.\n")
 
     for ds in DATASETS:
         true_f = os.path.join(PRED, f"{ds}_true.npy")
@@ -252,7 +270,7 @@ def main():
             W("|---|" + "---|" * 5)
             cell, praw = {}, {c: [] for c in ["agg"] + NAMES}
             for b in baselines:
-                bp, _ = load(b, "full", ds)
+                bp, _ = load(b, bl_abl(b, ds), ds)
                 cell[b] = {}
                 for cname, ch in [("agg", None)] + list(zip(NAMES, range(4))):
                     la = window_loss(ours, true, kind, ch)
@@ -293,7 +311,7 @@ def main():
             W("|---|---|---|---|---|---|---|")
             rows, ps = [], []
             for b in baselines:
-                bm = per_seed_metrics(b, "full", ds, true)
+                bm = per_seed_metrics(b, bl_abl(b, ds), ds, true)
                 n = min(len(om), len(bm))
                 x, y = om[met].values[:n], bm[met].values[:n]
                 tp = stats.ttest_rel(x, y).pvalue
@@ -312,9 +330,9 @@ def main():
 
     write_tex_tables(pd.DataFrame(dm_rows))
     pd.DataFrame(dm_rows).to_csv(
-        os.path.join(ROOT, "analysis", "significance_dm.csv"), index=False)
-    open(os.path.join(ROOT, "analysis", "significance.md"), "w").write("\n".join(L))
-    print("-> analysis/significance.md, analysis/significance_dm.csv")
+        os.path.join(ROOT, "analysis", f"significance{TAG}_dm.csv"), index=False)
+    open(os.path.join(ROOT, "analysis", f"significance{TAG}.md"), "w").write("\n".join(L))
+    print(f"-> analysis/significance{TAG}.md, analysis/significance{TAG}_dm.csv")
     return pd.DataFrame(dm_rows)
 
 

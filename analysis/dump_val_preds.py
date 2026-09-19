@@ -37,23 +37,36 @@ DEFAULTS = dict(seq_len=96, pred_len=24, patch_len=16, stride=8, d_model=256,
 
 
 def parse_tag(fname):
-    """{model}_{dataset}_{ablation}_s{seed}.pt -> parts, by matching known
-    names rather than splitting on '_' (datasets and ablations contain it)."""
+    """{model}_{dataset}_{ablation}[_norm{on,off}][_w{DxF}]_s{seed}.pt -> parts,
+    by matching known names rather than splitting on '_' (datasets and
+    ablations contain it). Returns (model, dataset, ablation, seed, norm,
+    width); norm is None for the historical normalization, width None for
+    the default width."""
+    import re
     from baselines.tslib_adapter import AVAILABLE
     stem = fname[:-3]
     seed = int(stem.rsplit("_s", 1)[1])
     rest = stem.rsplit("_s", 1)[0]
+    width = None
+    m = re.search(r"_w(\d+x\d+)$", rest)
+    if m:
+        width, rest = m.group(1), rest[:m.start()]
+    norm = None
+    m = re.search(r"_norm(on|off)$", rest)
+    if m:
+        norm, rest = m.group(1), rest[:m.start()]
     for model in sorted(AVAILABLE, key=len, reverse=True):
         if not rest.startswith(model + "_"):
             continue
         tail = rest[len(model) + 1:]
         for abl in sorted(ABLATIONS, key=len, reverse=True):
             if tail.endswith("_" + abl):
-                return model, tail[: -len(abl) - 1], abl, seed
+                return model, tail[: -len(abl) - 1], abl, seed, norm, width
     raise ValueError(f"cannot parse checkpoint name: {fname}")
 
 
-def build(model_name, dataset, ablation, train_ds, device, tslib_path):
+def build(model_name, dataset, ablation, train_ds, device, tslib_path,
+          norm=None, width=None):
     args = SimpleNamespace(**DEFAULTS)
     if model_name == "XAI-MeteoFormer":
         model = XAIMeteoFormer(
@@ -64,12 +77,14 @@ def build(model_name, dataset, ablation, train_ds, device, tslib_path):
             dropout=args.dropout, **ABLATIONS[ablation],
         )
     else:
-        # Historical configuration of the existing checkpoints: LSTM was
-        # trained with our RevIN, every other baseline without any per-window
-        # normalization of its own. Reproduced exactly so the weights load.
+        # norm None = historical configuration (LSTM with our RevIN, every
+        # other baseline without); a _normon/_normoff checkpoint must be
+        # rebuilt with that variant or its RevIN weights do not load.
+        wd = tuple(int(v) for v in width.split("x")) if width else None
         model = build_baseline(model_name, args, train_ds.n_channels,
                                train_ds.target_idx, train_ds.target_names,
-                               tslib_path=tslib_path)   # historical default
+                               tslib_path=tslib_path, norm_variant=norm,
+                               width=wd)
     return model.to(device)
 
 
@@ -96,7 +111,7 @@ def main():
     splits_cache = {}
     manifest = []
     for i, f in enumerate(ckpts, 1):
-        model_name, dataset, ablation, seed = parse_tag(f)
+        model_name, dataset, ablation, seed, norm, width = parse_tag(f)
         tag = f[:-3]
         suffix = "valpred" if a.split == "val" else "testpred"
         out = os.path.join(a.out_dir, f"{tag}_{suffix}.npy")
@@ -115,7 +130,7 @@ def main():
 
         set_seed(seed)
         model = build(model_name, dataset, ablation, train_ds, device,
-                      a.tslib_path)
+                      a.tslib_path, norm, width)
         sd = torch.load(os.path.join(a.ckpt_dir, f), map_location=device)
         model.load_state_dict(sd)
 

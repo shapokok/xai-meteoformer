@@ -44,6 +44,8 @@ from data.dataset import build_splits                      # noqa: E402
 from train import ABLATIONS, set_seed                      # noqa: E402
 from xm_models.xai_meteoformer import XAIMeteoFormer       # noqa: E402
 from baselines.tslib_adapter import build_baseline         # noqa: E402
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from selection import selected_suffix                  # noqa: E402
 
 DEFAULTS = dict(seq_len=96, pred_len=24, patch_len=16, stride=8, d_model=256,
                 n_heads=8, n_layers=2, dropout=0.2)
@@ -61,10 +63,19 @@ def build(model_name, ablation, train_ds, device, tslib):
                            target_idx=train_ds.target_idx, **DEFAULTS,
                            **ABLATIONS[ablation])
     else:
-        hist = "on" if model_name in ("LSTM", "GRU") else "off"
+        # "full" = historical normalization; "full_normon"/"full_normoff" =
+        # the variant selected for the main table (analysis/selection.py).
+        # The checkpoint must be rebuilt in its own variant or RevIN's
+        # weights do not load.
+        if ablation.endswith("_normon"):
+            nv = "on"
+        elif ablation.endswith("_normoff"):
+            nv = "off"
+        else:
+            nv = "on" if model_name in ("LSTM", "GRU") else "off"
         m = build_baseline(model_name, args, train_ds.n_channels,
                            train_ds.target_idx, train_ds.target_names,
-                           tslib_path=tslib, norm_variant=hist)
+                           tslib_path=tslib, norm_variant=nv)
     return m.to(device)
 
 
@@ -110,7 +121,8 @@ def main():
                                      for f in os.listdir(ck)
                                      if f.endswith(".pt") and f"_{ds}_" in f})
         for mn in models:
-            abl = "no_revin" if mn == "XAI-MeteoFormer" else "full"
+            abl = ("no_revin" if mn == "XAI-MeteoFormer"
+                   else "full" + selected_suffix(mn, ds))
             dev = torch.device("cpu" if mn in CPU_ONLY or
                                not torch.backends.mps.is_available() else "mps")
             for seed in a.seeds:

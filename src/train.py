@@ -190,6 +190,33 @@ def evaluate(model, loader, device, mu, sigma, target_idx, names, limit=None):
     return metrics, pred, true
 
 
+def block_dropout(x: torch.Tensor, p: float, block: int) -> torch.Tensor:
+    """Station-outage augmentation: for each window with probability p, blank a
+    contiguous block of `block` hours across EVERY channel and refill it by
+    linear interpolation along time -- the same repair the robustness harness
+    uses (analysis/block_missing.py), so training sees what an outage looks
+    like at inference. The block position is uniform over the window, so the
+    model cannot learn to rely on any fixed part of it.
+    """
+    if p <= 0:
+        return x
+    B, L, C = x.shape
+    hit = torch.rand(B) < p
+    if not hit.any():
+        return x
+    x = x.clone()
+    grid = np.arange(L)
+    for i in hit.nonzero(as_tuple=True)[0].tolist():
+        lo = int(np.random.randint(0, L - block + 1))
+        keep = np.setdiff1d(grid, np.arange(lo, lo + block))
+        xk = x[i, keep, :].numpy()
+        filled = np.empty((L, C), dtype=np.float32)
+        for c in range(C):
+            filled[:, c] = np.interp(grid, keep, xk[:, c])
+        x[i] = torch.from_numpy(filled)
+    return x
+
+
 def run_one(args, seed: int) -> None:
     lim = args.smoke_batches if args.smoke else None
     # Smoke artefacts go to their own folder. Otherwise the truncated
@@ -223,7 +250,8 @@ def run_one(args, seed: int) -> None:
     key = {"model": args.model_name, "dataset": args.dataset,
            "ablation": args.ablation, "seed": seed,
            "missing_rate": args.missing_rate, "lambda_ent": lam_key,
-           "norm_variant": nv, "width": width_tag}
+           "norm_variant": nv, "width": width_tag,
+           "loss": args.loss, "aug_block": float(args.aug_block)}
     if already_done(results_csv, key) and not args.force:
         print(f"skip (already in results): {key}")
         return
@@ -275,7 +303,9 @@ def run_one(args, seed: int) -> None:
         opt, max_lr=args.lr, epochs=args.epochs, steps_per_epoch=len(train_dl),
         pct_start=0.3,
     )
-    reg_loss = nn.HuberLoss(delta=1.0)
+    # Every model in the paper is trained with the same criterion; --loss is
+    # swept symmetrically over all of them, never for one model alone.
+    reg_loss = nn.MSELoss() if args.loss == "mse" else nn.HuberLoss(delta=1.0)
     cls_loss = nn.BCEWithLogitsLoss(
         pos_weight=torch.tensor(
             [max(1.0, (1 - train_ds.frost_rate) / max(train_ds.frost_rate, 1e-3))],
@@ -300,6 +330,10 @@ def run_one(args, seed: int) -> None:
         suffix += f"_norm{nv}"
     if width_tag != "default":
         suffix += f"_w{width_tag}"
+    if args.loss != "huber":
+        suffix += f"_{args.loss}"
+    if args.aug_block > 0:
+        suffix += f"_augblk{args.aug_block:g}"
     tag = f"{args.model_name}_{args.dataset}_{args.ablation}{suffix}_s{seed}"
     ckpt_path = os.path.join(ckpt_dir, f"{tag}.pt")
 
@@ -309,7 +343,10 @@ def run_one(args, seed: int) -> None:
         tot = 0.0
         n_seen = 0
         for b in maybe_limit(train_dl, lim):
-            x = b["x"].to(device, non_blocking=True)
+            x = b["x"]
+            if args.aug_block > 0:
+                x = block_dropout(x, args.aug_block, args.aug_block_len)
+            x = x.to(device, non_blocking=True)
             y = b["y"].to(device, non_blocking=True)
             c = b["cls"].to(device, non_blocking=True)
             opt.zero_grad(set_to_none=True)
@@ -419,6 +456,17 @@ def main():
     p.add_argument("--batch_size", type=int, default=64)
     p.add_argument("--epochs", type=int, default=40)
     p.add_argument("--patience", type=int, default=6)
+    p.add_argument("--loss", default="huber", choices=["huber", "mse"],
+                   help="regression criterion, swept over ALL models at once: "
+                        "'huber' (delta=1, what every published run used) or "
+                        "'mse', which optimises the squared error that RMSE "
+                        "reports. Part of the resume key and of the tag.")
+    p.add_argument("--aug_block", type=float, default=0.0,
+                   help="probability of blanking one contiguous block of the "
+                        "input window during TRAINING (station-outage "
+                        "augmentation); 0 disables it")
+    p.add_argument("--aug_block_len", type=int, default=16,
+                   help="length in hours of the blanked block")
     p.add_argument("--lambda_cls", type=float, default=0.2)
     p.add_argument("--lambda_ent", type=float, default=0.01)
     p.add_argument("--missing_rate", type=float, default=0.0)

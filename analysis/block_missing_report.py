@@ -1,5 +1,6 @@
 """Render analysis/block_missing.md from analysis/block_missing.csv."""
 import os
+import sys
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -13,8 +14,13 @@ def nm(m):
     return f"**{LABEL}**" if m == OURS else m
 
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from selection import keep_selected  # noqa: E402
+
+
 def main():
     d = pd.read_csv(os.path.join(ROOT, "analysis", "block_missing.csv"))
+    d = keep_selected(d)     # the variant the main table reports
     L = []
     W = L.append
     W("# Block gaps: an operational outage, and a second external check (P0-5)\n")

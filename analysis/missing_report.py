@@ -1,5 +1,6 @@
 """Render analysis/missing_robustness.md."""
 import os
+import sys
 import numpy as np
 import pandas as pd
 
@@ -13,11 +14,19 @@ def nm(m):
     return f"**{LABEL}**" if m == OURS else m
 
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from selection import keep_selected  # noqa: E402
+
+
 def main():
     global s_all
     s = pd.read_csv(os.path.join(ROOT, "analysis", "missing_robustness_sub.csv"))
     f = pd.read_csv(os.path.join(ROOT, "analysis",
                                  "missing_robustness_fulltest.csv"))
+    # the subsample validation pairs rows of the SAME run; everything else
+    # reports only the variant the main table uses (analysis/selection.py)
+    s_raw = s
+    s = keep_selected(s)
     s_all = s
     L = []
     W = L.append
@@ -57,7 +66,7 @@ def main():
         full = {"jena": 13908, "beijing_aotizhongxin": 6895}[ds]
         W(f"| {ds} | {full} | {int(r.n_windows)} | 1-in-{int(r.test_stride)} |")
     W("")
-    m = f.merge(s, on=["dataset", "model", "seed", "missing_rate"],
+    m = f.merge(s_raw, on=["dataset", "model", "ablation", "seed", "missing_rate"],
                 suffixes=("_full", "_sub"))
     if len(m):
         d1 = m.MAE_sub - m.MAE_full

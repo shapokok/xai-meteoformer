@@ -5,6 +5,7 @@ Emits markdown for analysis/ and MDPI tables for paper/tables/.
 """
 
 import os
+import sys
 
 import numpy as np
 import pandas as pd
@@ -20,13 +21,20 @@ LABEL = "MeteoFormer"
 SEEDS = range(5)
 
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from selection import selected_suffix  # noqa: E402
+
+
 def variants(ds):
+    """our model plus every baseline, each in the normalization variant the
+    main table reports (analysis/selection.py: lower mean validation loss)"""
     v = [OURS]
     for f in sorted(os.listdir(PRED)):
         if f.endswith("_pred.npy") and f"_{ds}_full_" in f:
             m = f.split(f"_{ds}_")[0]
-            if m != OURS[0] and (m, "full") not in v:
-                v.append((m, "full"))
+            abl = "full" + selected_suffix(m, ds)
+            if m != OURS[0] and (m, abl) not in v:
+                v.append((m, abl))
     return v
 
 
