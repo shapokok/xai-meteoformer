@@ -331,7 +331,7 @@ while Crossformer keeps the better transfer RMSE (7.876 vs 8.125).
   models. The oracle figures in §7 remain a measurement; the numbers below are
   the achievable result.
 
-## Resolution: the RMSE gap closes under honest calibration
+## Resolution: the RMSE gap stops being significant under honest calibration
 
 Fitting one scalar per channel on **validation** and freezing it — for every
 model, not only ours — settles the question this whole decomposition opened.
@@ -344,7 +344,14 @@ Diebold–Mariano against Crossformer, both models calibrated:
 
 Negative favours our model. The squared-loss deficit — the single result the
 paper was rejected over — **is no longer significant on either dataset**, while
-the absolute-loss advantage survives and grows. RMSE: ours 5.267 → 5.162
+the absolute-loss advantage survives and grows.
+
+The two datasets differ in how far it goes, and the wording should follow the
+data rather than the headline. On **Jena** the deficit effectively disappears:
++0.09 at p = 0.61, an order of magnitude smaller than before. On **Beijing** it
+shrinks by roughly 40 % but remains +2.02 at **p = 0.076** — below the
+threshold, yet borderline, not absent. Write "stops being significant", never
+"is closed". RMSE: ours 5.267 → 5.162
 against Crossformer 5.166 → 5.153 on Jena; 8.216 → 8.057 against 8.002 → 7.931
 on Beijing.
 
