@@ -108,53 +108,104 @@ No hyperparameter search was run for any model — see
 
 ## 6. Hardware and software
 
-- **Training**: Kaggle notebook, single **NVIDIA Tesla T4** (16 GB), 12-hour
-  session cap. The runner appends to a CSV after every run and skips any
-  `(model, dataset, ablation, seed, …)` already present, so a session that dies
-  at hour 12 loses one run rather than the batch.
-- **Post-hoc analysis in `analysis/`**: Apple Silicon, macOS 25.6, CPU and MPS.
-  MPS raises an internal Metal assertion on `Tensor.unfold`, used for patching
-  by PatchTST and XAI-MeteoFormer. The analysis harnesses replace it at runtime
-  with an equivalent stack of slices ([mps_unfold_fix.py](analysis/mps_unfold_fix.py);
-  outputs agree with CPU to ~2e-6, gradients to ~6e-7 relative), so everything
-  now runs on MPS. `src/` is not modified.
-- **Versions** (the local analysis environment, `.venv`):
+Two environments produced the results, and they are **not** interchangeable.
+Every number in the paper comes from one of them; the table below says which.
 
-  | Package | Version |
-  |---|---|
-  | Python | 3.9.6 |
-  | torch | 2.8.0 |
-  | numpy | 2.0.2 |
-  | pandas | 2.3.3 |
-  | scikit-learn | 1.6.1 |
-  | scipy | 1.13.1 |
+### 6.1 Training — Kaggle (GPU)
 
-  `shap` is **not** a dependency: GradientSHAP is implemented directly in
-  [src/xai.py](src/xai.py) with torch autograd.
+Everything that trains a model ran on Kaggle notebooks: a single **NVIDIA
+Tesla T4** (16 GB) for the published runs, and **2 × Tesla T4** for the
+resubmission runs, which drive one process per card. 12-hour session cap; the
+runner appends to a CSV after every run and skips any
+`(model, dataset, ablation, seed, norm_variant, width, loss, aug_block)`
+already present, so a session that dies at hour 12 loses one run, not the batch.
 
-  **Kaggle environment: captured going forward (Minor #8, closed).** Both
-  notebooks now write `outputs/requirements_frozen.txt` (`pip freeze`) and
-  `outputs/environment.json` (Python, torch, CUDA, cuDNN, GPU, TSLib commit) at
-  the start of every run. The runs that produced the *published* results predate
-  this and their environment was not captured; state that in the paper.
+| | Value |
+|---|---|
+| GPU | NVIDIA Tesla T4, 14 911 MiB |
+| Python | 3.12.13 |
+| torch | 2.10.0+cu128 |
+| CUDA runtime | 12.8 |
+| cuDNN | 91002 |
+| OS | Linux 6.12.90, glibc 2.35 |
+| TSLib | `4e938a1767106324dd753b2a44832bf870a0252e` (pinned, asserted) |
+
+Captured automatically by every run into `analysis/environment.json` and
+`analysis/requirements_frozen.txt` (`pip freeze`, 939 packages) — this is
+Reviewer 1 Minor #8. **The runs behind the originally published tables predate
+that capture and their exact environment is not recorded**; the code, the
+pinned TSLib commit and the hardware model are the same, and the paper should
+say so rather than imply a full capture.
+
+### 6.2 Post-hoc analysis — laptop (CPU / MPS)
+
+Everything in `analysis/` that only *reads* checkpoints and predictions ran
+locally. No training, no GPU hours.
+
+| | Value |
+|---|---|
+| Hardware | Apple Silicon, macOS 26.6 (Darwin 25.6), CPU and MPS |
+| Python | 3.9.6 |
+| torch | 2.8.0 |
+| numpy / pandas / scipy | 2.0.2 / 2.3.3 / 1.13.1 |
+| scikit-learn | 1.6.1 |
+
+MPS raises an internal Metal assertion on `Tensor.unfold`, used for patching by
+PatchTST and XAI-MeteoFormer. The analysis harnesses replace it at runtime with
+an equivalent stack of slices
+([mps_unfold_fix.py](analysis/mps_unfold_fix.py); outputs agree with CPU to
+~2e-6, gradients to ~6e-7 relative), so everything runs on MPS. `src/` is not
+modified. `shap` is **not** a dependency: GradientSHAP is implemented directly
+in [src/xai.py](src/xai.py) with torch autograd.
+
+### 6.3 Which result came from which environment
+
+| Result | File | Environment |
+|---|---|---|
+| Main accuracy tables, ablations, normalization variants, Crossformer widths, window sweep, MSE and outage-augmentation variants | `analysis/results_clean.csv`, `analysis/results_variants.csv`, `analysis/results_seqlen*.csv` | **Kaggle, T4** |
+| Test predictions, written by the training run itself | `predictions/*_pred.npy` | **Kaggle, T4** |
+| Validation predictions, re-run from the checkpoints afterwards | `predictions_val/*_valpred.npy` ([dump_val_preds.py](analysis/dump_val_preds.py)) | laptop, CPU / MPS |
+| Significance (Diebold–Mariano, paired tests) | `analysis/significance*.md/.csv` | laptop, CPU (reads predictions) |
+| Explanation fidelity, deterministic and permutation | `analysis/xai_fidelity_v2.md`, `analysis/fidelity_det.csv` | laptop, MPS |
+| Time-axis occlusion, attention stability, temporal pooling | `analysis/occlusion_time.md`, `analysis/attention_stability.md`, `analysis/temporal_pooling_target_specificity.md` | laptop, MPS |
+| Missing-input robustness, block gaps | `analysis/missing_robustness.md`, `analysis/block_missing.md` | laptop, MPS |
+| Zero-shot cross-station transfer | `analysis/cross_station.md` | laptop, MPS |
+| Error decomposition, dispersion calibration | `analysis/error_decomposition.md`, `analysis/variance_calibration.md` | laptop, CPU (numpy only) |
+| Frost events, per-target and per-horizon tables | `analysis/frost_events.md`, `analysis/per_target_horizon.md` | laptop, CPU |
+
+Two models are not bit-reproducible by construction, on either machine:
+`Informer` samples keys with `torch.randint` inside `ProbAttention`'s forward
+pass, and `TimesNet` runs an FFT. Re-running their inference moves the MAE in
+the fourth decimal (measured: 3.3e-3 for Informer, 2.1e-4 for TimesNet, both
+< 0.3 % relative). Every other model reproduced its published in-domain MAE to
+1e-7 through a different harness
+([analysis/cross_station.md](analysis/cross_station.md), control section).
 
 - **Baselines**: [Time-Series-Library](https://github.com/thuml/Time-Series-Library),
   vendored in `Time-Series-Library/`. The adapter patches
   `layers/SelfAttention_Family.py` at import time to make the
   `reformer_pytorch` import optional; no baseline used here needs it.
-  **TSLib is pinned** to `4e938a1767106324dd753b2a44832bf870a0252e` in both
-  notebooks (a shallow fetch of that one commit, plus an assert that fails the
+  **TSLib is pinned** to `4e938a1767106324dd753b2a44832bf870a0252e` in every
+  notebook (a shallow fetch of that one commit, plus an assert that fails the
   run if it drifts).
 
 ## 7. Compute budget
 
-From the repaired `train_time_s`
-([analysis/results_hygiene.md](analysis/results_hygiene.md)):
+From `train_time_s` of every training run in the repository
+([analysis/results_hygiene.md](analysis/results_hygiene.md) explains the repair
+applied to the older rows):
 
-- **138 training runs, 18.8 GPU-hours** on the T4 in total.
-- Per-model means are in [analysis/tuning_budget.md](analysis/tuning_budget.md).
-- Post-hoc inference in `analysis/` (validation predictions for all 138
-  checkpoints) adds no GPU time — it ran on the laptop.
+| Set | Runs | GPU-hours |
+|---|---|---|
+| published configuration (`analysis/results_clean.csv`) | 300 | 36.4 |
+| training-recipe variants — MSE, outage augmentation (`analysis/results_variants.csv`) | 230 | 31.6 |
+| window sweep, L = 24/48/192 (`analysis/results_seqlen*.csv`) | 30 | 4.2 |
+| **total** | **560** | **72.2** |
+
+Per-model means are in [analysis/tuning_budget.md](analysis/tuning_budget.md).
+Everything in `analysis/` — validation and test inference, SHAP, occlusion,
+robustness harnesses, cross-station transfer — adds **no GPU time**: it ran on
+the laptop of §6.2.
 
 ## 8. Repository and artefacts
 
