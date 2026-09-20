@@ -259,7 +259,18 @@ Training uses `HuberLoss(delta=1.0)` on globally standardised targets (train sd:
 
 About 93 % of residuals sit in the quadratic region, so the objective is effectively MSE for every model here. That settles the **cross-model** question — every model trains under the same objective, so the loss cannot explain why we differ from Crossformer.
 
-It does **not** follow that a pure MSE loss would change nothing for us. Huber down-weights to linear exactly the ~7 % of residuals outside δ, and that tail is where RMSE lives: the worst 1 % of residuals carry ~27 % of the total squared error (§4). Training with MSE should therefore pull the RH over-dispersion of §7 toward the MSE-optimal dispersion. When such a run is available, the quantities to read are the **RH sd ratio** and the **per-channel MSE**, not the aggregate RMSE alone — the aggregate can move for the wrong reason, since it is an unweighted mean dominated by RH.
+It does **not** follow that a pure MSE loss would change nothing for us. Huber down-weights to linear exactly the ~7 % of residuals outside δ, and that tail is where RMSE lives: the worst 1 % of residuals carry ~27 % of the total squared error (§4). Training with MSE should therefore pull the RH over-dispersion of §7 toward the MSE-optimal dispersion.
+
+**Tested, and it is not enough** (110 runs, all 11 models, 5 seeds, both datasets; [loss_mse.md](analysis/loss_mse.md)). The prediction was directionally right and quantitatively far short:
+
+| RH sd ratio (pred/true) | Huber (headline) | MSE | MSE-optimal | Crossformer |
+|---|---|---|---|---|
+| Jena | 0.951 | **0.927** | 0.861 | 0.850 |
+| Beijing | 0.933 | **0.919** | 0.819 | 0.849 |
+
+MSE moved the dispersion about a quarter of the way to the optimum, and the RMSE gap did not close: on Jena ours went 5.267 → 5.214 while Crossformer also improved, 5.166 → 5.150. On Beijing it cost first place by MAE (4.151 → 4.224, Crossformer 4.247 → 4.110). Huber was kept; the MSE runs are an appendix negative result.
+
+So the mechanism is confirmed — RH dispersion is the lever, and the loss does move it in the predicted direction — but the training loss is too blunt an instrument to move it far enough. The one lever that the oracle in §7 says would be sufficient (rescaling RH by a ≈ 0.86) has still never been tested off-test: that would be a variance calibration fitted on validation, which was cancelled by decision, not refuted.
 
 ## 7. What does explain it: RH dispersion
 
