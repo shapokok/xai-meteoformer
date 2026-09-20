@@ -93,7 +93,7 @@ Headline configuration: `XAI-MeteoFormer`, ablation `no_revin`, seq_len 96,
 | 3 | Frost F1 = 0.412 called "optimal" while AUC is the lowest | **manuscript**; current numbers in `paper/tables/events_*.tex` (Jena: ours AUC 0.975 vs Crossformer 0.980, F1 0.701 vs 0.717) and `analysis/frost_events.md`, which documents the baseline adaptation and the validation-selected threshold |
 | 4 | Novelty is a recombination — say so honestly | **manuscript**; supported by `analysis/tuning_budget.md` |
 | 5 | Eq. (15)/(16) rollout notation garbled | **manuscript** |
-| 6 | *"Only one Beijing station (Aotizhongxin) is used; cross-station generalization is untested despite 12 stations being available in PRSA."* | **partly** — zero-shot transfer to the other 11 stations is running (`analysis/cross_station.py`), 204 of 660 runs done; the in-domain control reproduces `results_clean.csv` exactly |
+| 6 | *"Only one Beijing station (Aotizhongxin) is used; cross-station generalization is untested despite 12 stations being available in PRSA."* | **done** — `analysis/cross_station.md`, `paper/tables/cross_station.tex`: zero-shot transfer of all 11 models × 5 seeds to the other 11 stations, no retraining and no refitting (the Aotizhongxin scaler is applied unchanged). **Transfer MAE: ours 4.114 ± 0.068, first of 11, lowest MAE at 9 of the 11 stations** (iTransformer 4.183, Crossformer 4.211). Crossformer keeps RMSE (7.876 vs our 8.125), as in domain. Kendall τ between the in-domain ranking and each station: 0.78–1.00. The in-domain control reproduces `results_clean.csv` to 1e-7 for every model except Informer (3.3e-3: `ProbAttention` samples with `torch.randint` inside the forward pass). |
 | 7 | *"The promised missing-data robustness sweep (5/10/20% synthetic missingness) is absent, yet operational decision support is the paper's stated motivation."* | **done** — `analysis/missing_robustness.md`: first on both datasets at 20 % scattered missingness; `analysis/block_missing.md` adds the block-outage case, where it is not |
 | 8 | *"The GPU/CPU configuration is 'not recorded'; for reproducibility, at least hardware and framework/library versions should be reported (the code link is implied but not provided)."* | **done** — `analysis/reproducibility.md`, `analysis/environment.json`, `analysis/requirements_frozen.txt`: Tesla T4, Python 3.12.13, torch 2.10.0+cu128, CUDA 12.8, TSLib pinned at `4e938a17` |
 | 9 | "First attempt to benchmark attention against SHAP…" overstated | **manuscript** |
@@ -139,6 +139,8 @@ Headline configuration: `XAI-MeteoFormer`, ablation `no_revin`, seq_len 96,
 - **Training-recipe variants, each swept over all 11 models** (`analysis/aug_robustness.md`, `analysis/loss_mse.md`). Neither replaces the headline: both are worse on clean validation loss, and choosing one because it wins on test would be selection on test.
   - Station-outage augmentation: Jena 6th → **1st** under the outage with clean MAE unchanged (3.028 → 3.023); Beijing degradation +60 % → +48 % but the rank stays 8th and clean MAE goes 4.151 → 4.255. Both datasets reported.
   - MSE instead of Huber: a negative result. The RMSE gap does not close (ours 5.267 → 5.214 while Crossformer goes 5.166 → 5.150) and Beijing MAE loses first place (4.151 → 4.224 against Crossformer 4.247 → 4.110). The humidity dispersion moves only 0.951 → 0.927 against an optimum near 0.86, where Crossformer already sits at 0.850.
+
+- **Zero-shot transfer across the 11 remaining PRSA stations** (`analysis/cross_station.md`): our model transfers best — 4.114 ± 0.068 MAE against 4.183 (iTransformer) and 4.211 (Crossformer), first at 9 of 11 stations, and every model's error *drops* slightly off-domain, so the ranking is not an artefact of one station.
 
 ## Headline numbers for the paper
 
@@ -196,9 +198,8 @@ then the edit. Order follows the reviews.
 
 ## Still open
 
-1. **Cross-station transfer** (R1 Minor #6): 456 of 660 runs left; local, resumes from `analysis/cross_station.csv`.
-2. **Manuscript edits**: R1 Major #2, R1 Minor #1, #2, #3, #4, #5, #9, and the whole R2 reporting paragraph. None need computation; all need the text rewritten against the numbers above.
-3. **If a recipe variant is ever promoted to the headline**, fidelity must be recomputed for it: 10 deterministic + 10 permutation runs, about 1 h locally.
+1. **Manuscript edits**: R1 Major #2, R1 Minor #1, #2, #3, #4, #5, #9, and the whole R2 reporting paragraph. None need computation; all need the text rewritten against the numbers above.
+2. **If a recipe variant is ever promoted to the headline**, fidelity must be recomputed for it: 10 deterministic + 10 permutation runs, about 1 h locally.
 
 ## The two decisive objections, and where we stand
 
