@@ -58,6 +58,8 @@ Kendall τ between the in-domain ranking (Aotizhongxin) and the ranking at each 
 
 Kendall τ over stations: mean 0.92, min 0.78, max 1.00.
 
+Per-channel replication: the error budget behind these aggregates is the same in domain and on the unseen stations — our deficit against Crossformer is the humidity channel and nothing else (in domain RH +21.8, transfer +24.1 in MSE units, while temperature stays at -7.8 / -8.2 in our favour). See the replication section of [analysis/error_decomposition.md](analysis/error_decomposition.md).
+
 ## MAE per station (seed mean)
 
 | Model | Changping | Dingling | Dongsi | Guanyuan | Gucheng | Huairou | Nongzhanguan | Shunyi | Tiantan | Wanliu | Wanshouxigong |

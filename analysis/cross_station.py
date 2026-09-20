@@ -228,6 +228,12 @@ def report(d):
     W(f"Kendall τ over stations: mean {np.mean(taus):.2f}, min {np.min(taus):.2f}, "
       f"max {np.max(taus):.2f}.\n")
 
+    W("Per-channel replication: the error budget behind these aggregates is the "
+      "same in domain and on the unseen stations — our deficit against "
+      "Crossformer is the humidity channel and nothing else (in domain RH "
+      "+21.8, transfer +24.1 in MSE units, while temperature stays at -7.8 / "
+      "-8.2 in our favour). See the replication section of "
+      "[analysis/error_decomposition.md](analysis/error_decomposition.md).\n")
     W("## MAE per station (seed mean)\n")
     piv = st_m.pivot(index="model", columns="station", values="MAE").loc[agg.index]
     W("| Model | " + " | ".join(stations) + " |")

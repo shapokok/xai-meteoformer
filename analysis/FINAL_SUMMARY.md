@@ -140,7 +140,7 @@ Headline configuration: `XAI-MeteoFormer`, ablation `no_revin`, seq_len 96,
   - Station-outage augmentation: Jena 6th → **1st** under the outage with clean MAE unchanged (3.028 → 3.023); Beijing degradation +60 % → +48 % but the rank stays 8th and clean MAE goes 4.151 → 4.255. Both datasets reported.
   - MSE instead of Huber: a negative result. The RMSE gap does not close (ours 5.267 → 5.214 while Crossformer goes 5.166 → 5.150) and Beijing MAE loses first place (4.151 → 4.224 against Crossformer 4.247 → 4.110). The humidity dispersion moves only 0.951 → 0.927 against an optimum near 0.86, where Crossformer already sits at 0.850.
 
-- **Zero-shot transfer across the 11 remaining PRSA stations** (`analysis/cross_station.md`): our model transfers best — 4.114 ± 0.068 MAE against 4.183 (iTransformer) and 4.211 (Crossformer), first at 9 of 11 stations, and every model's error *drops* slightly off-domain, so the ranking is not an artefact of one station.
+- **Zero-shot transfer across the 11 remaining PRSA stations** (`analysis/cross_station.md`): our model transfers best — 4.114 ± 0.068 MAE against 4.183 (iTransformer) and 4.211 (Crossformer), first at 9 of 11 stations, and every model's error *drops* slightly off-domain, so the ranking is not an artefact of one station. The per-channel budget replicates too: our deficit against Crossformer is the humidity channel alone, in domain (RH +21.8 MSE) and on the unseen stations (+24.1), while temperature stays in our favour (−7.8 / −8.2) — see the replication section of `analysis/error_decomposition.md`. So the MAE lead and the RMSE deficit both transfer, and the deficit has a single, named cause.
 
 ## Headline numbers for the paper
 
