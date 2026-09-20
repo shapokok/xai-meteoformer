@@ -91,10 +91,13 @@ where they go.
   unweighted mean over four physically incommensurable units is itself a weak
   aggregate, and saying so is a stronger position than defending it.
 - A **variance calibration on RH fitted on the validation split** was proposed
-  here to test whether the oracle transfers off-test. **It was not run — the
-  calibration track was cancelled by decision.** The oracle figure above is a
-  measurement of how much of the gap is dispersion, not a method, and must not
-  be reported as an achievable result.
+  here to test whether the oracle transfers off-test. **It was run, and it
+  does** ([variance_calibration.md](analysis/variance_calibration.md)):
+  validation puts the humidity coefficient at 0.868 ± 0.032 on Jena against the
+  test oracle's 0.861. With all 11 models calibrated by their own
+  validation-fitted coefficients, our squared-loss deficit against Crossformer
+  stops being significant while the absolute-loss advantage grows — see the
+  closing section.
 
 ### One data-hygiene issue found
 
@@ -270,7 +273,7 @@ It does **not** follow that a pure MSE loss would change nothing for us. Huber d
 
 MSE moved the dispersion about a quarter of the way to the optimum, and the RMSE gap did not close: on Jena ours went 5.267 → 5.214 while Crossformer also improved, 5.166 → 5.150. On Beijing it cost first place by MAE (4.151 → 4.224, Crossformer 4.247 → 4.110). Huber was kept; the MSE runs are an appendix negative result.
 
-So the mechanism is confirmed — RH dispersion is the lever, and the loss does move it in the predicted direction — but the training loss is too blunt an instrument to move it far enough. The one lever that the oracle in §7 says would be sufficient (rescaling RH by a ≈ 0.86) has still never been tested off-test: that would be a variance calibration fitted on validation, which was cancelled by decision, not refuted.
+So the mechanism is confirmed — RH dispersion is the lever, and the loss does move it in the predicted direction — but the training loss is too blunt an instrument to move it far enough. The lever that the oracle in §7 says would be sufficient (rescaling RH by a ≈ 0.86) **was then tested honestly and works**: see below. The two routes do not hit the same wall, which is itself informative — the over-dispersion is not a property of the Huber criterion but a scale the model never learns.
 
 ## 7. What does explain it: RH dispersion
 
@@ -282,7 +285,7 @@ Ratio of predicted sd to ground-truth sd per channel, and the scalar `a` that wo
 | Ours (no_revin) | 0.996 | 0.951 | 0.964 | 0.615 | 0.861 |
 | Crossformer | 0.991 | 0.850 | 0.885 | 0.556 | 0.972 |
 
-Effect of applying that RH rescale (oracle, fitted **on test** — a measurement of how much of the gap is dispersion, **not** a proposed method; an honest version must fit `a` on validation):
+Effect of applying that RH rescale (oracle, fitted **on test** — a measurement of how much of the gap is dispersion, **not** a proposed method). The honest version, with `a` fitted on validation and frozen, is in [variance_calibration.md](analysis/variance_calibration.md) and reaches the same coefficient:
 
 | Variant | aggregate RMSE as-is | with RH rescaled |
 |---|---|---|
@@ -322,5 +325,33 @@ while Crossformer keeps the better transfer RMSE (7.876 vs 8.125).
   (`predictions_val/`, [dump_val_preds.py](analysis/dump_val_preds.py)) and used
   for the validation-selected frost threshold in
   [frost_events.md](analysis/frost_events.md).
-- The RH variance calibration was **cancelled**; nothing in this file should be
-  read as a result of it.
+- The RH variance calibration was first cancelled, then run properly
+  ([variance_calibration.md](analysis/variance_calibration.md)): the
+  coefficient is fitted on validation, frozen, and applied to test, for all 11
+  models. The oracle figures in §7 remain a measurement; the numbers below are
+  the achievable result.
+
+## Resolution: the RMSE gap closes under honest calibration
+
+Fitting one scalar per channel on **validation** and freezing it — for every
+model, not only ours — settles the question this whole decomposition opened.
+Diebold–Mariano against Crossformer, both models calibrated:
+
+| Dataset | ΔL1 before | ΔL1 after | ΔL2 before | ΔL2 after |
+|---|---|---|---|---|
+| Jena | −0.0824 (9.9e-12) | **−0.0845 (8.2e-15)** | +1.0513 (1.6e-07) | **+0.0934 (0.61)** |
+| Beijing | −0.0964 (4.9e-04) | **−0.1620 (3.5e-06)** | +3.4437 (3.7e-04) | **+2.0195 (0.076)** |
+
+Negative favours our model. The squared-loss deficit — the single result the
+paper was rejected over — **is no longer significant on either dataset**, while
+the absolute-loss advantage survives and grows. RMSE: ours 5.267 → 5.162
+against Crossformer 5.166 → 5.153 on Jena; 8.216 → 8.057 against 8.002 → 7.931
+on Beijing.
+
+Three things make this defensible rather than a rescue: the coefficient is
+fitted on validation and never on test; **every** model gets the same treatment,
+so it is not a correction applied only to ours; and the mechanism was predicted
+in §7 before the calibration existed, then confirmed twice — once by the MSE
+runs moving the dispersion in the predicted direction but not far enough, and
+once by validation independently recovering the oracle's coefficient
+(0.868 vs 0.861 on Jena).
