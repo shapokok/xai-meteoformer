@@ -31,6 +31,7 @@ Output -> analysis/missing_robustness_sub.csv  (subsampled, all models)
 
 import argparse
 import os
+import re
 import sys
 
 import numpy as np
@@ -55,21 +56,27 @@ RATES = [0.0, 0.05, 0.10, 0.20]
 CPU_ONLY = {"PatchTST", "XAI-MeteoFormer"}
 
 
+def base_ablation(ablation):
+    """Strip the training-variant suffixes that are part of the tag but not
+    of ABLATIONS: _norm{on,off} (normalization), _mse (loss), _augblk<p>."""
+    return re.sub(r"(_normon|_normoff|_mse|_augblk[0-9.]+)+$", "", ablation)
+
+
 def build(model_name, ablation, train_ds, device, tslib):
     from types import SimpleNamespace
     args = SimpleNamespace(**DEFAULTS)
     if model_name == "XAI-MeteoFormer":
         m = XAIMeteoFormer(n_channels=train_ds.n_channels,
                            target_idx=train_ds.target_idx, **DEFAULTS,
-                           **ABLATIONS[ablation])
+                           **ABLATIONS[base_ablation(ablation)])
     else:
         # "full" = historical normalization; "full_normon"/"full_normoff" =
         # the variant selected for the main table (analysis/selection.py).
         # The checkpoint must be rebuilt in its own variant or RevIN's
         # weights do not load.
-        if ablation.endswith("_normon"):
+        if "_normon" in ablation:
             nv = "on"
-        elif ablation.endswith("_normoff"):
+        elif "_normoff" in ablation:
             nv = "off"
         else:
             nv = "on" if model_name in ("LSTM", "GRU") else "off"
@@ -96,6 +103,10 @@ def main():
     ap.add_argument("--datasets", nargs="*", default=["jena", "beijing_aotizhongxin"])
     ap.add_argument("--models", nargs="*", default=None)
     ap.add_argument("--seeds", type=int, nargs="*", default=[0, 1, 2, 3, 4])
+    ap.add_argument("--tag_suffix", default="",
+                    help="evaluate a training variant instead of the published "
+                         "checkpoints, e.g. _augblk0.5 or _mse; the suffix is "
+                         "appended to the tag and recorded in the ablation column")
     ap.add_argument("--target_windows", type=int, default=2800,
                     help="subsample the test split to about this many windows; "
                          "0 disables subsampling")
@@ -122,7 +133,7 @@ def main():
                                      if f.endswith(".pt") and f"_{ds}_" in f})
         for mn in models:
             abl = ("no_revin" if mn == "XAI-MeteoFormer"
-                   else "full" + selected_suffix(mn, ds))
+                   else "full" + selected_suffix(mn, ds)) + a.tag_suffix
             dev = torch.device("cpu" if mn in CPU_ONLY or
                                not torch.backends.mps.is_available() else "mps")
             for seed in a.seeds:

@@ -30,7 +30,7 @@ Validated against **110 full-test runs**, paired exactly on (dataset, model, see
 | RMSE | +0.0021 | 0.0153 | 0.27% |
 
 - mean degradation at 20 % on Jena, **full test** (n=27): **0.841%**
-- mean degradation at 20 % on Jena, **subsample** (n=55): **0.798%**
+- mean degradation at 20 % on Jena, **subsample** (n=55): **0.777%**
 
 The subsample does not shift the measured degradation.
 
@@ -44,9 +44,9 @@ The subsample does not shift the measured degradation.
 | Model | 0 % | 5 % | 10 % | 20 % | Δ% at 20 % |
 |---|---|---|---|---|---|
 | Transformer | 3.452±0.067 | 3.453±0.067 | 3.454±0.066 | 3.459±0.064 | +0.21 |
-| LSTM | 3.357±0.021 | 3.358±0.022 | 3.361±0.022 | 3.368±0.022 | +0.32 |
+| LSTM | 3.317±0.045 | 3.318±0.045 | 3.320±0.045 | 3.326±0.045 | +0.26 |
+| Autoformer | 3.903±0.047 | 3.906±0.048 | 3.907±0.047 | 3.915±0.046 | +0.29 |
 | Informer | 3.457±0.065 | 3.458±0.066 | 3.459±0.071 | 3.471±0.066 | +0.43 |
-| Autoformer | 3.988±0.110 | 3.991±0.111 | 3.997±0.114 | 4.006±0.112 | +0.46 |
 | TimesNet | 3.313±0.015 | 3.315±0.016 | 3.319±0.016 | 3.329±0.017 | +0.47 |
 | TFT | 3.388±0.066 | 3.392±0.065 | 3.399±0.065 | 3.415±0.063 | +0.82 |
 | iTransformer | 3.300±0.013 | 3.305±0.014 | 3.313±0.013 | 3.334±0.011 | +1.03 |
@@ -60,10 +60,10 @@ The subsample does not shift the measured degradation.
 | Model | 0 % | 5 % | 10 % | 20 % | Δ% at 20 % |
 |---|---|---|---|---|---|
 | Transformer | 5.632±0.084 | 5.631±0.084 | 5.632±0.083 | 5.637±0.081 | +0.10 |
-| LSTM | 5.563±0.017 | 5.564±0.017 | 5.566±0.017 | 5.575±0.018 | +0.23 |
+| LSTM | 5.412±0.056 | 5.412±0.056 | 5.414±0.056 | 5.421±0.056 | +0.17 |
+| Autoformer | 6.205±0.069 | 6.209±0.073 | 6.211±0.072 | 6.220±0.073 | +0.25 |
 | Informer | 5.638±0.094 | 5.639±0.094 | 5.642±0.099 | 5.656±0.095 | +0.32 |
 | TimesNet | 5.466±0.018 | 5.468±0.018 | 5.472±0.017 | 5.484±0.018 | +0.33 |
-| Autoformer | 6.267±0.173 | 6.274±0.174 | 6.280±0.178 | 6.297±0.179 | +0.47 |
 | TFT | 5.555±0.052 | 5.561±0.051 | 5.570±0.051 | 5.593±0.052 | +0.68 |
 | iTransformer | 5.567±0.018 | 5.573±0.020 | 5.581±0.021 | 5.608±0.025 | +0.73 |
 | **MeteoFormer** | 5.271±0.050 | 5.276±0.047 | 5.285±0.045 | 5.314±0.042 | +0.81 |
@@ -75,11 +75,11 @@ The subsample does not shift the measured degradation.
 
 | Model | T | RH | P | WS |
 |---|---|---|---|---|
-| Autoformer | -0.07 | +0.54 | +0.71 | +0.40 |
+| Autoformer | -0.15 | +0.36 | +0.51 | +0.13 |
 | Crossformer | +0.79 | +1.28 | +1.82 | +0.46 |
 | DLinear | +1.45 | +1.36 | +0.74 | +0.73 |
 | Informer | +0.17 | +0.41 | +0.85 | +0.16 |
-| LSTM | -0.05 | +0.40 | +0.49 | +0.20 |
+| LSTM | +0.01 | +0.25 | +0.59 | +0.20 |
 | PatchTST | +1.32 | +1.44 | +2.21 | +0.65 |
 | TFT | +0.26 | +0.90 | +1.33 | +0.25 |
 | TimesNet | +0.09 | +0.48 | +0.88 | +0.32 |
@@ -93,10 +93,10 @@ The subsample does not shift the measured degradation.
 |---|---|---|
 | 1 | **MeteoFormer** | **MeteoFormer** |
 | 2 | Crossformer | Crossformer |
-| 3 | iTransformer | TimesNet  ←changed |
-| 4 | TimesNet | iTransformer  ←changed |
-| 5 | PatchTST | LSTM  ←changed |
-| 6 | LSTM | PatchTST  ←changed |
+| 3 | iTransformer | LSTM  ←changed |
+| 4 | TimesNet | TimesNet |
+| 5 | LSTM | iTransformer  ←changed |
+| 6 | PatchTST | PatchTST |
 | 7 | TFT | TFT |
 | 8 | DLinear | Transformer  ←changed |
 | 9 | Transformer | DLinear  ←changed |
@@ -114,8 +114,8 @@ Ranking by MAE is **changed** between the clean test and 20 % missing.
 
 | Model | 0 % | 5 % | 10 % | 20 % | Δ% at 20 % |
 |---|---|---|---|---|---|
-| Transformer | 4.974±0.047 | 4.975±0.047 | 4.977±0.046 | 4.981±0.045 | +0.14 |
-| Autoformer | 5.461±0.035 | 5.463±0.034 | 5.466±0.033 | 5.471±0.034 | +0.18 |
+| Transformer | 4.895±0.071 | 4.895±0.070 | 4.896±0.070 | 4.896±0.071 | +0.03 |
+| Autoformer | 5.347±0.112 | 5.346±0.111 | 5.348±0.110 | 5.350±0.107 | +0.05 |
 | LSTM | 4.343±0.034 | 4.344±0.033 | 4.347±0.033 | 4.352±0.033 | +0.20 |
 | TimesNet | 4.426±0.033 | 4.428±0.033 | 4.430±0.032 | 4.436±0.031 | +0.22 |
 | TFT | 4.676±0.177 | 4.680±0.176 | 4.684±0.175 | 4.693±0.175 | +0.36 |
@@ -130,8 +130,8 @@ Ranking by MAE is **changed** between the clean test and 20 % missing.
 
 | Model | 0 % | 5 % | 10 % | 20 % | Δ% at 20 % |
 |---|---|---|---|---|---|
-| Autoformer | 9.549±0.116 | 9.552±0.117 | 9.556±0.117 | 9.566±0.113 | +0.17 |
-| Transformer | 8.955±0.170 | 8.959±0.171 | 8.963±0.172 | 8.971±0.171 | +0.18 |
+| Transformer | 8.922±0.118 | 8.923±0.117 | 8.924±0.120 | 8.923±0.121 | +0.00 |
+| Autoformer | 9.416±0.184 | 9.416±0.184 | 9.421±0.183 | 9.424±0.177 | +0.09 |
 | TimesNet | 8.275±0.064 | 8.277±0.063 | 8.283±0.062 | 8.291±0.065 | +0.20 |
 | LSTM | 8.104±0.028 | 8.105±0.027 | 8.112±0.027 | 8.121±0.028 | +0.22 |
 | TFT | 8.433±0.172 | 8.441±0.170 | 8.451±0.169 | 8.467±0.166 | +0.41 |
@@ -146,7 +146,7 @@ Ranking by MAE is **changed** between the clean test and 20 % missing.
 
 | Model | T | RH | P | WS |
 |---|---|---|---|---|
-| Autoformer | +0.26 | +0.21 | -0.01 | +0.20 |
+| Autoformer | -0.70 | +0.26 | -0.09 | +0.10 |
 | Crossformer | +0.14 | +1.14 | +1.26 | +0.48 |
 | DLinear | +1.22 | +0.91 | +0.61 | +0.77 |
 | Informer | +0.05 | +0.58 | +0.36 | +0.16 |
@@ -154,7 +154,7 @@ Ranking by MAE is **changed** between the clean test and 20 % missing.
 | PatchTST | +1.29 | +0.86 | +0.95 | +1.20 |
 | TFT | -0.50 | +0.61 | +0.25 | +0.16 |
 | TimesNet | -0.54 | +0.35 | +0.43 | +0.22 |
-| Transformer | -0.06 | +0.19 | +0.20 | +0.09 |
+| Transformer | -0.30 | +0.02 | +0.46 | +0.01 |
 | **MeteoFormer** | +0.60 | +0.88 | +1.41 | +0.49 |
 | iTransformer | +0.56 | +0.78 | +0.64 | +0.68 |
 
@@ -170,8 +170,8 @@ Ranking by MAE is **changed** between the clean test and 20 % missing.
 | 6 | PatchTST | PatchTST |
 | 7 | TimesNet | TimesNet |
 | 8 | TFT | TFT |
-| 9 | Informer | Informer |
-| 10 | Transformer | Transformer |
+| 9 | Transformer | Transformer |
+| 10 | Informer | Informer |
 | 11 | Autoformer | Autoformer |
 
 Ranking by MAE is **changed** between the clean test and 20 % missing.

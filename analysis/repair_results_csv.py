@@ -28,6 +28,10 @@ BLOCK = ["params", "train_time_s", "infer_time_s", "best_val", "epochs_run",
 # Extended identity of a run. Older CSVs predate norm_variant/width; those
 # rows are back-filled with the configuration they were actually trained in.
 KEY = ["model", "dataset", "ablation", "seed", "missing_rate"]
+# Training-recipe columns. The published table is the huber / no-augmentation
+# recipe; the sweeps over these go to analysis/results_variants.csv so they
+# cannot silently replace a published run that differs only in the recipe.
+RECIPE = {"loss": "huber", "aug_block": 0.0}
 EXTRA_DEFAULTS = {"norm_variant": None, "width": "default",
                   "bl_d_model": None, "bl_d_ff": None}
 
@@ -55,6 +59,10 @@ def repair(df: pd.DataFrame) -> pd.DataFrame:
 def backfill(df: pd.DataFrame) -> pd.DataFrame:
     """Give pre-flag rows the configuration they were actually trained in."""
     df = df.copy()
+    for c, v in RECIPE.items():
+        if c not in df.columns:
+            df[c] = v
+        df[c] = df[c].fillna(v)
     for c, v in EXTRA_DEFAULTS.items():
         if c not in df.columns:
             df[c] = v
@@ -81,15 +89,26 @@ def main():
         before = len(fixed)
         # exact duplicates of the same run; keep the first
         fixed = fixed.drop_duplicates(
-            subset=KEY + ["lambda_ent", "norm_variant", "width"], keep="first")
+            subset=KEY + ["lambda_ent", "norm_variant", "width"]
+            + list(RECIPE), keep="first")
         dropped = before - len(fixed)
         print(f"{f}: {before} rows, {n_shift} column-shifted, "
               f"{dropped} duplicate runs dropped -> {len(fixed)}")
         out.append(fixed)
 
-    clean = pd.concat(out, ignore_index=True)
-    clean = clean.drop_duplicates(
-        subset=KEY + ["lambda_ent", "norm_variant", "width"], keep="first")
+    allrows = pd.concat(out, ignore_index=True)
+    allrows = allrows.drop_duplicates(
+        subset=KEY + ["lambda_ent", "norm_variant", "width"] + list(RECIPE),
+        keep="first")
+    is_pub = np.ones(len(allrows), dtype=bool)
+    for c, v in RECIPE.items():
+        is_pub &= (allrows[c].astype(float) == v).values if c == "aug_block" \
+            else (allrows[c].astype(str) == str(v)).values
+    clean = allrows[is_pub]
+    var = allrows[~is_pub]
+    vdst = os.path.join(ROOT, "analysis", "results_variants.csv")
+    var.to_csv(vdst, index=False)
+    print(f"-> {vdst}  ({len(var)} rows of training-recipe variants)")
     dst = os.path.join(ROOT, "analysis", "results_clean.csv")
     clean.to_csv(dst, index=False)
     print(f"-> {dst}  ({len(clean)} rows)")

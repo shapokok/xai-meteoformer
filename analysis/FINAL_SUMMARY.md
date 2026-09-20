@@ -54,7 +54,7 @@ Headline configuration throughout: `XAI-MeteoFormer`, ablation `no_revin`
 
   Shorter is better on both datasets, and monotonically so. **Validation also selects L = 24 on both datasets**, so this is a validation-based choice, not a test-set one. This fits occlusion: the model uses the last ~16 h.
 - **Side check (single tests, raw p, not in any table):** on the published test windows, the L = 24 model vs Crossformer 128x128 (L = 96) gives Jena ΔL1 −0.168 (p < 1e-15) and ΔL2 −0.183 (p = 0.34); Beijing ΔL1 −0.213 (p = 4.4e-16) and ΔL2 +0.068 (p = 0.94). **At L = 24 Crossformer's significant squared-loss advantage disappears.** Caveat: every baseline ran at L = 96. Switching our headline to L = 24 without a window sweep for the baselines would reopen the fairness question.
-- **Status:** **half done.** The **mean-only RevIN** variant (`revin_mean_only`, already defined in `src/train.py`) **was never run**: there are no rows and no checkpoints for it. The reviewer's "together with a mean-only variant this is a full answer" is only half answered. Cost: 5 seeds × 2 datasets = 10 runs, about 1 h on Kaggle T4 ×2. **Author decision.**
+- **Status:** done, **without the mean-only variant**. The authors decided not to run it: the RevIN mechanism is now confirmed three times over — occlusion (`occlusion_time.md`), block gaps (`block_missing.md`) and this window sweep — and a fourth normalization variant would add a data point, not an explanation. Major #6 is answered by the mechanism, and the answer is stated as such. `revin_mean_only` remains available in `src/train.py` if a reviewer insists.
 
 ### Major #7 — separate the entropy regulariser from real faithfulness (P0-4)
 - **Computed:** `no_entropy` is now at 5 seeds on both datasets (it was 3 seeds, Jena only). **New:** a clean control on the headline configuration, `no_revin` vs `no_revin+no_entropy`, 5 seeds × 2 datasets.
@@ -64,7 +64,9 @@ Headline configuration throughout: `XAI-MeteoFormer`, ablation `no_revin`
 - **Missing:** the fidelity and occlusion analysis has **not been re-run on the new checkpoints** (`no_entropy` s3–4 and Beijing; `no_revin+no_entropy`). Until it is, P0-4 on faithfulness stays provisional. That work belongs to the analysis session (xai_fidelity_v2.py), locally, without GPU quota.
 
 ### Minor #6 — cross-station transfer
-- **Status:** **not done.** Zero-shot transfer of the Aotizhongxin checkpoints to the other 11 PRSA stations. Raw CSVs for all 12 stations are in `data/raw`, only one is processed. It is not in the P-plan. Local, about 1 h on MPS, no GPU quota. **Author decision.**
+- **Computed (in progress):** zero-shot transfer of the Aotizhongxin checkpoints to the other 11 PRSA stations — no retraining, no refitting, the Aotizhongxin training scaler applied to every station, same channels and same test months. 11 models x 5 seeds x 12 stations.
+- **File:** `analysis/cross_station.py` -> `analysis/cross_station.csv`, `analysis/cross_station.md`, `paper/tables/cross_station.tex`.
+- **Status:** **204 of 660 runs done**, paused while the analysis session held the GPU; it resumes from the CSV. The in-domain control reproduces `results_clean.csv` exactly (Autoformer seed 0: 5.188077 both sides), so the harness is validated.
 
 ### Minor #7 — robustness to missing inputs
 - **Files:** `analysis/missing_robustness.md` (scattered dropouts), `analysis/block_missing.md` (block outage).
@@ -128,25 +130,42 @@ Headline configuration throughout: `XAI-MeteoFormer`, ablation `no_revin`
   - The variable-attention row removes **both** variable attention and the entropy term. It is labelled that way in both files.
 - **Appendix table:** `paper/tables/ablation.tex` (from `full`, RevIN on, Jena), now 5 seeds for every row. Changed numbers are listed below.
 
+### Training-recipe variants (both swept over all 11 models)
+Two recipes were trained on the GPU track, each for every model, 5 seeds, both datasets, so neither is a private advantage for the proposed model. **Neither replaces the headline**: the selection rule is the lower mean validation loss, and on clean validation data both are worse for our model.
+
+**Station-outage augmentation** — `analysis/aug_robustness.md`, `paper/tables/aug_robustness.tex`. During training, with probability 0.5 one contiguous 16 h block of the window is blanked and refilled by interpolation.
+
+| | validation loss | clean MAE | outage MAE | degradation | rank under outage |
+|---|---|---|---|---|---|
+| Jena, published | 0.1437 | 3.028 | 5.251 | +73% | 6 / 11 |
+| **Jena, augmented** | 0.1448 | **3.023** | **4.616** | **+53%** | **1 / 11** |
+| Beijing, published | 0.1592 | 4.150 | 6.637 | +60% | 8 / 11 |
+| Beijing, augmented | 0.1605 | 4.255 | 6.307 | +48% | 8 / 11 |
+
+On Jena the augmentation removes the weakness outright at no cost to clean accuracy. On Beijing it reduces the damage but does not change the standing, and clean MAE gets worse (4.151 -> 4.255, still first). **Both datasets are reported**; Jena alone would be selective reporting.
+
+**MSE instead of Huber** — `analysis/loss_mse.md`, `paper/tables/loss_mse_appendix.tex`. A negative result, kept in the appendix. It does not close the RMSE gap (Jena 5.267 -> 5.214 while Crossformer goes 5.166 -> 5.150) and **costs us first place on MAE on Beijing** (4.151 -> 4.224 against Crossformer 4.247 -> 4.110). The mechanism is real but too weak: the dispersion of our humidity forecast (sd of prediction over sd of observation) moves only 0.951 -> 0.927 against an optimum near 0.86, where Crossformer already sits at 0.850.
+
 ### Changed numbers in `paper/tables/`
-Only `ablation.tex` changed. The rows went from 3 to 5 seeds:
+- `ablation.tex`: every row went from 3 seeds to 5. MAE: no multiscale 3.122 -> 3.128, no cls 3.132 -> 3.127, no fusion 3.211 -> 3.206, no entropy 3.186 -> 3.178, no temp attn 3.194 -> 3.199, no var attn 3.198 -> 3.183.
+- `main_{jena,beijing}.tex`: now the validation-selected normalization. Four rows changed — Autoformer (both datasets) and Transformer (Beijing) move to `on`, LSTM (Jena) to `off`; all four baselines get **stronger**, and our model stays first by MAE on both datasets. The historical version is `main_historical_*.tex`.
+- `per_target_*`, `per_horizon_*`, `events_*`: two rows each, the switched baselines.
+- `significance_*.tex`: recomputed against the selected variants. **No conclusion changed**: significantly better than all 10 baselines on absolute loss, on both datasets; Crossformer still significantly better on squared loss. `analysis/significance_historical*` keeps the previous comparison and is byte-identical to it.
+- New: `ablation_norevin.tex`, `aug_robustness.tex`, `loss_mse_appendix.tex`, `cross_station.tex` (pending the remaining runs).
+- Unchanged: `fidelity_*.tex` — owned by `analysis/xai_fidelity_v2.py` (the analysis session is replacing the estimator with a deterministic one); `report.py` no longer overwrites them from the superseded single-seed metrics.
 
-| Row | before (3 seeds) MAE | after (5 seeds) MAE |
-|---|---|---|
-| no multiscale | 3.122 ± 0.028 | 3.128 ± 0.026 |
-| no cls | 3.132 ± 0.032 | 3.127 ± 0.024 |
-| no fusion | 3.211 ± 0.021 | 3.206 ± 0.028 |
-| no entropy | 3.186 ± 0.036 | 3.178 ± 0.028 |
-| no temp attn | 3.194 ± 0.020 | 3.199 ± 0.020 |
-| no var attn | 3.198 ± 0.017 | 3.183 ± 0.024 |
+## Decisions taken
 
-New: `ablation_norevin.tex`, `main_normselected_{jena,beijing_aotizhongxin}.tex`.
-Byte-identical: `main_*`, `significance_*`, `per_target_*`, `per_horizon_*`, `events_*`, `fidelity_*`.
+1. **Window length: 96 stays.** Validation picks L = 24 on both datasets and test agrees, but switching would require the baselines at L = 24 as well, which re-opens the asymmetry this round is closing. The sweep is reported as an analysis of context redundancy, consistent with occlusion and the block gaps.
+2. **Main table: validation-selected normalization**, for all 11 models, historical in the appendix. Every downstream analysis was re-run for the four switched variants.
+3. **Mean-only RevIN: not run** (see Major #6).
+4. **Cross-station transfer: being run** (Minor #6).
+5. **Headline model unchanged.** Neither the augmented nor the MSE recipe replaces it; both are worse on clean validation loss, and picking one because it wins on test is selection on test.
 
-## Decisions for the authors
+## Still open
 
-1. **Main table, normalization.** `main_*.tex` keeps the historical normalization. The pre-registered rule (`norm_symmetry_runs.md`) says the validation-selected variants go into the main table (`main_normselected_*.tex` is ready). If you follow the rule, `frost_events`, `missing_robustness` and `block_missing` have to be re-run for the 4 switched variants. That is local, about 1 h on MPS, per the analysis session's estimate.
-2. **Mean-only RevIN** (R1 Major #6): 10 runs, about 1 h of Kaggle quota.
-3. **Cross-station transfer** (R1 Minor #6): local, about 1 h.
-4. **Headline window length.** Validation picks L = 24 on both datasets, and test agrees (see Major #6). Two options: (a) keep 96 as the headline and report the sweep as a finding consistent with occlusion; (b) switch the headline to 24, which also removes Crossformer's squared-loss advantage but, for fairness, requires the baselines at L = 24 as well: 10 models × 5 seeds × 2 datasets on the GPU track.
-5. **The reviewer text**, to confirm this list is complete.
+- **The reviewer text.** This list was rebuilt from the items named in the working sessions and the numbers cited in `analysis/*.md`; R1 Major #1, #2, #5, R1 Minor #1–#5 and several R2 items are unknown here. Check it against the reviews before writing the response letter.
+- **Cross-station transfer**: 456 of 660 runs left, local, resumes from `analysis/cross_station.csv`.
+- **P0-4 faithfulness**: the fidelity estimator is being replaced by a deterministic one in the analysis session; the P0-4 section of `xai_fidelity_v2.md` is provisional until that lands.
+- **`analysis/tuning_budget.md`** still says 138 runs and calls Crossformer under-provisioned; both are superseded (300 runs; width does not help Crossformer).
+- **If the augmented or MSE recipe is ever promoted** to the headline, fidelity has to be recomputed for it: 10 runs deterministic plus 10 permutation, about 1 h locally.
