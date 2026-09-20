@@ -142,6 +142,12 @@ Headline configuration: `XAI-MeteoFormer`, ablation `no_revin`, seq_len 96,
 
 - **Zero-shot transfer across the 11 remaining PRSA stations** (`analysis/cross_station.md`): our model transfers best — 4.114 ± 0.068 MAE against 4.183 (iTransformer) and 4.211 (Crossformer), first at 9 of 11 stations, and every model's error *drops* slightly off-domain, so the ranking is not an artefact of one station. The per-channel budget replicates too: our deficit against Crossformer is the humidity channel alone, in domain (RH +21.8 MSE) and on the unseen stations (+24.1), while temperature stays in our favour (−7.8 / −8.2) — see the replication section of `analysis/error_decomposition.md`. So the MAE lead and the RMSE deficit both transfer, and the deficit has a single, named cause.
 
+- **Dispersion calibration, fitted on validation** (`analysis/variance_calibration.md`, `paper/tables/variance_calibration_appendix.tex`). The oracle rescaling in `error_decomposition.md` was fitted on test and could only measure; this one fits the coefficient per (model, dataset, seed, channel) **on validation**, freezes it, and scores test once — for all 11 models.
+  - **The coefficient is reachable without the test set**: validation finds 0.868 ± 0.032 on Jena against the test oracle's 0.861, and 0.845 ± 0.019 on Beijing against 0.819.
+  - So the loss route and the calibration route do **not** hit the same wall: training with MSE moved the dispersion only 0.951 → 0.927, while one validation-fitted number reaches the optimum. The over-dispersion is not a property of the Huber criterion.
+  - **With every model calibrated, our squared-loss deficit to Crossformer stops being significant**: Jena ΔL2 +1.051 (p = 1.6e-07) → +0.093 (p = 0.61); Beijing +3.444 (p = 3.7e-04) → +2.020 (p = 0.076). The MAE lead survives and strengthens (Jena ΔL1 −0.082 → −0.085, Beijing −0.096 → −0.162, both significant).
+  - This is an appendix analysis of the mechanism. The headline, the main table and every other number stay uncalibrated.
+
 ## Headline numbers for the paper
 
 | | Jena | Beijing |
@@ -210,7 +216,10 @@ not the answer the paper originally wanted:
    on Jena."* The comparison he saw was against our `full` configuration
    (MAE 3.195). The headline `no_revin` model is **3.025 vs 3.107**, first by MAE
    on both datasets and significant against all ten baselines. Crossformer keeps
-   RMSE, at every width, and that is now stated instead of glossed.
+   RMSE, at every width, and that is now stated instead of glossed — with one
+   qualification the appendix supplies: once every model is given a dispersion
+   calibration fitted on validation, that RMSE gap is no longer significant on
+   either dataset (`analysis/variance_calibration.md`).
 2. *"Built-in attention is not a useful explanation."* Confirmed, and the final
    numbers are worse than the ones he saw: on the deterministic metric the
    attention's fidelity is 0.012 (Jena) and 0.046 (Beijing), and even our SHAP
