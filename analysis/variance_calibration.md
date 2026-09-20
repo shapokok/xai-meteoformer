@@ -94,4 +94,6 @@ Diebold–Mariano on the per-window loss, our model against Crossformer, **both 
 
 **Answer to the question.** The coefficient is reachable: validation finds 0.868 on Jena against the test oracle's 0.861, a difference of 0.007 — inside the seed-to-seed spread. The two routes do **not** hit the same wall: training with MSE moved the dispersion only from 0.951 to 0.927 ([analysis/loss_mse.md](analysis/loss_mse.md)), while a coefficient fitted on validation reaches the optimum the test oracle wanted. The over-dispersion is therefore not a property of the Huber criterion; it is a scale the model does not learn but that a single validation-fitted number recovers.
 
+**Wording.** The deficit stops being *significant*; it is not closed. On Jena it is essentially gone (+0.09, p = 0.61); on Beijing it shrinks by about 40 % and its p-value sits at the border (+2.02, p = 0.076).
+
 What it does not do is change the paper: calibration is applied to every model, our MAE lead survives it and the squared-loss comparison with Crossformer is in the table above. The headline stays uncalibrated.

@@ -145,7 +145,8 @@ Headline configuration: `XAI-MeteoFormer`, ablation `no_revin`, seq_len 96,
 - **Dispersion calibration, fitted on validation** (`analysis/variance_calibration.md`, `paper/tables/variance_calibration_appendix.tex`). The oracle rescaling in `error_decomposition.md` was fitted on test and could only measure; this one fits the coefficient per (model, dataset, seed, channel) **on validation**, freezes it, and scores test once — for all 11 models.
   - **The coefficient is reachable without the test set**: validation finds 0.868 ± 0.032 on Jena against the test oracle's 0.861, and 0.845 ± 0.019 on Beijing against 0.819.
   - So the loss route and the calibration route do **not** hit the same wall: training with MSE moved the dispersion only 0.951 → 0.927, while one validation-fitted number reaches the optimum. The over-dispersion is not a property of the Huber criterion.
-  - **With every model calibrated, our squared-loss deficit to Crossformer stops being significant**: Jena ΔL2 +1.051 (p = 1.6e-07) → +0.093 (p = 0.61); Beijing +3.444 (p = 3.7e-04) → +2.020 (p = 0.076). The MAE lead survives and strengthens (Jena ΔL1 −0.082 → −0.085, Beijing −0.096 → −0.162, both significant).
+  - **With every model calibrated, our squared-loss deficit to Crossformer stops being significant**: Jena ΔL2 +1.051 (p = 1.6e-07) → +0.093 (p = 0.61); Beijing +3.444 (p = 3.7e-04) → +2.020 (p = 0.076). Say "no longer significant", not "closed": on Jena the deficit is essentially gone, on Beijing it shrinks by 40 % and its p-value sits at the border. The MAE lead survives and strengthens (Jena ΔL1 −0.082 → −0.085, Beijing −0.096 → −0.162, both significant).
+  - **Why this is not a rescue by fitting:** the coefficient comes from validation and never from test; all 11 models get it, not ours alone; and the mechanism was predicted in `error_decomposition.md` *before* any calibration existed, then confirmed twice independently — the MSE run moved the dispersion in the predicted direction but too little, and validation recovered the oracle's coefficient on its own.
   - This is an appendix analysis of the mechanism. The headline, the main table and every other number stay uncalibrated.
 
 ## Headline numbers for the paper
@@ -219,7 +220,8 @@ not the answer the paper originally wanted:
    RMSE, at every width, and that is now stated instead of glossed — with one
    qualification the appendix supplies: once every model is given a dispersion
    calibration fitted on validation, that RMSE gap is no longer significant on
-   either dataset (`analysis/variance_calibration.md`).
+   either dataset — gone on Jena, borderline on Beijing (p = 0.076)
+   (`analysis/variance_calibration.md`).
 2. *"Built-in attention is not a useful explanation."* Confirmed, and the final
    numbers are worse than the ones he saw: on the deterministic metric the
    attention's fidelity is 0.012 (Jena) and 0.046 (Beijing), and even our SHAP
