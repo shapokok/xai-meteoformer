@@ -155,7 +155,13 @@ PatchTST and XAI-MeteoFormer. The analysis harnesses replace it at runtime with
 an equivalent stack of slices
 ([mps_unfold_fix.py](analysis/mps_unfold_fix.py); outputs agree with CPU to
 ~2e-6, gradients to ~6e-7 relative), so everything runs on MPS. `src/` is not
-modified. `shap` is **not** a dependency: GradientSHAP is implemented directly
+modified.
+
+That workaround was written part-way through the analysis, so a few results
+were computed on CPU before it existed and the rest on MPS afterwards — marked
+in 6.3. The mixture is harmless precisely because the two paths were checked
+against each other at the tolerances above, but it is recorded rather than
+smoothed over. `shap` is **not** a dependency: GradientSHAP is implemented directly
 in [src/xai.py](src/xai.py) with torch autograd.
 
 ### 6.3 Which result came from which environment
@@ -167,8 +173,10 @@ in [src/xai.py](src/xai.py) with torch autograd.
 | Validation predictions, re-run from the checkpoints afterwards | `predictions_val/*_valpred.npy` ([dump_val_preds.py](analysis/dump_val_preds.py)) | laptop, CPU / MPS |
 | Significance (Diebold–Mariano, paired tests) | `analysis/significance*.md/.csv` | laptop, CPU (reads predictions) |
 | Explanation fidelity, deterministic and permutation | `analysis/xai_fidelity_v2.md`, `analysis/fidelity_det.csv` | laptop, MPS |
-| Time-axis occlusion, attention stability, temporal pooling | `analysis/occlusion_time.md`, `analysis/attention_stability.md`, `analysis/temporal_pooling_target_specificity.md` | laptop, MPS |
-| Missing-input robustness, block gaps | `analysis/missing_robustness.md`, `analysis/block_missing.md` | laptop, MPS |
+| Time-axis occlusion | `analysis/occlusion_time.md` | laptop: CPU for `no_revin` and `no_entropy`, MPS for the rest |
+| Attention stability among correlated predictors | `analysis/attention_stability.md` | laptop, CPU — **no model is run**, it reads `xai/*.npz` |
+| Target-specificity of the temporal pooling | `analysis/temporal_pooling_target_specificity.md` | **no computation** — answered from the source code |
+| Missing-input robustness, block gaps | `analysis/missing_robustness.md`, `analysis/block_missing.md` | laptop, MPS, except the PatchTST and XAI-MeteoFormer rows, computed on CPU before the `unfold` workaround (noted in `block_missing.md`) |
 | Zero-shot cross-station transfer | `analysis/cross_station.md` | laptop, MPS |
 | Error decomposition, dispersion calibration | `analysis/error_decomposition.md`, `analysis/variance_calibration.md` | laptop, CPU (numpy only) |
 | Frost events, per-target and per-horizon tables | `analysis/frost_events.md`, `analysis/per_target_horizon.md` | laptop, CPU |

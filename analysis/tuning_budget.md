@@ -41,7 +41,14 @@ dozen parameters in the input and RevIN layers.
 | TFT | 1 | 10 | 1.9 | 3 640 676 | — | — | published configuration |
 | TimesNet | 1 | 10 | 1.9 | 1 186 507 | — | — | published configuration |
 | iTransformer | 1 | 10 | 0.2 | 1 611 032 | — | — | published configuration |
-| **total** | | **330** | **40.6** | | | | |
+| **total, reported study** | | **330** | **40.6** | | | | |
+
+Two appendix variants were trained on top of this and are not part of the
+selection above: the MSE-loss runs ([loss_mse.md](analysis/loss_mse.md)) and the
+station-outage augmentation, 230 runs and 31.6 GPU-h together
+(`analysis/results_variants.csv`). **Grand total for the resubmission: 560
+training runs, 72.2 GPU-h**, which is the figure quoted in
+[reproducibility.md](analysis/reproducibility.md) §7.
 
 The selected configurations are what the main table now reports
 (`analysis/selection.py`, `paper/tables/main_*.tex`); the historical ones are
