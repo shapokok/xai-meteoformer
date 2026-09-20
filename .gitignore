@@ -18,3 +18,4 @@ __pycache__/
 /predictions_val/
 /xai_v2_out/
 paper.zip
+/reviews/
