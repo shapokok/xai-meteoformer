@@ -281,6 +281,27 @@ Effect of applying that RH rescale (oracle, fitted **on test** — a measurement
 
 ---
 
+## Replication: the same channel budget transfers to 11 unseen stations
+
+The zero-shot transfer of R1 Minor #6 ([cross_station.md](analysis/cross_station.md),
+660 runs: 11 models × 5 seeds × 12 stations, scaler and weights from
+Aotizhongxin, nothing fitted on the target station) reproduces this
+decomposition on stations the models never saw. Our MSE minus Crossformer's,
+per channel, averaged over seeds and stations:
+
+| | T | RH | P | WS | aggregate | RH share of the gross gap |
+|---|---|---|---|---|---|---|
+| in-domain (Aotizhongxin) | **−7.85** | +21.68 | −0.06 | +0.01 | +3.44 | 73 % |
+| transfer (11 other stations) | **−8.26** | +23.95 | +0.10 | +0.02 | +3.95 | 74 % |
+
+The structure is unchanged: we win temperature by a wide margin, lose relative
+humidity, and the unweighted four-channel mean turns that into an RMSE deficit.
+It is the same mechanism out of domain as in it, which is the strongest
+available evidence that the finding is a property of the models rather than of
+one station's test split. The headline transfer result points the same way:
+our model has the best transfer MAE (4.114 ± 0.068, first on 9 of 11 stations)
+while Crossformer keeps the better transfer RMSE (7.876 vs 8.125).
+
 ## Follow-up status
 
 - The per-channel finding (we win T, lose RH; the aggregate is dominated by RH)
