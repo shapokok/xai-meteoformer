@@ -8,12 +8,12 @@ This is the external ground truth the paper is missing: it is measured from the 
 
 **The recency control.** A trivial ordering — later patches matter more — is included as a baseline explanation. Any attention mechanism that does not beat it is contributing nothing.
 
-**Which rows to compare.** `no_entropy` is defined relative to `full` (RevIN **on**), not to the headline `no_revin`. The effect of the entropy regulariser is `full` vs `no_entropy`, which differ in `lambda_ent` alone. Setting `no_entropy` against the headline changes RevIN too and is not a test of the regulariser — an earlier reading of this file did exactly that and is withdrawn; see [xai_fidelity_v2.md](analysis/xai_fidelity_v2.md).
+**Which rows to compare.** The entropy regulariser is isolated only by variants that differ in `lambda_ent` alone. Primary control, on the published configuration: `no_revin` vs `no_revin+no_entropy` (both RevIN off). Secondary: `full` vs `no_entropy` (both RevIN on). Setting `no_entropy` against the headline changes RevIN too — an earlier reading of this file did exactly that and is withdrawn; see [xai_fidelity_v2.md](analysis/xai_fidelity_v2.md).
 
 
 ---
 
-## Headline model (no_revin, RevIN off) — Jena, 5 seeds
+## Headline model (no_revin: RevIN off, entropy on) — Jena, 5 seeds
 
 ### Spearman agreement with the occlusion ranking
 
@@ -47,7 +47,41 @@ Attention spread: **0.0904 … 0.0924**, i.e. 2.1% of its own mean, against a un
 
 ---
 
-## full (RevIN on, entropy on) — control for no_entropy — Jena, 5 seeds
+## no_revin+no_entropy (RevIN off, entropy off) — clean control for the regulariser — Jena, 5 seeds
+
+### Spearman agreement with the occlusion ranking
+
+| | mean ρ | sd | per seed |
+|---|---|---|---|
+| temporal attention | +0.471 | 0.508 | +0.682, -0.436, +0.709, +0.745, +0.655 |
+| attention rollout | +0.329 | 0.145 | +0.409, +0.209, +0.491, +0.145, +0.391 |
+| **recency control** | +0.545 | 0.207 | +0.518, +0.218, +0.564, +0.655, +0.773 |
+
+- paired attention − recency: **-0.0745** (t-test p = 0.652)
+- paired rollout − recency: **-0.2164** (t-test p = 0.090)
+
+### Where the model actually looks
+
+| patch | hours | occlusion ΔMAE | temporal attention | rollout |
+|---|---|---|---|---|
+| p0 | 0-16 | **+0.0137** ± 0.0178 | 0.0905 ± 0.0005 | 0.0632 ± 0.0101 |
+| p1 | 8-24 | **+0.0140** ± 0.0201 | 0.0904 ± 0.0002 | 0.0547 ± 0.0045 |
+| p2 | 16-32 | **+0.0030** ± 0.0181 | 0.0905 ± 0.0004 | 0.0634 ± 0.0026 |
+| p3 | 24-40 | **+0.0030** ± 0.0155 | 0.0905 ± 0.0004 | 0.0654 ± 0.0027 |
+| p4 | 32-48 | **+0.0012** ± 0.0146 | 0.0907 ± 0.0003 | 0.0537 ± 0.0022 |
+| p5 | 40-56 | **-0.0048** ± 0.0133 | 0.0908 ± 0.0003 | 0.0593 ± 0.0019 |
+| p6 | 48-64 | **-0.0051** ± 0.0116 | 0.0908 ± 0.0003 | 0.0583 ± 0.0026 |
+| p7 | 56-72 | **+0.0449** ± 0.0218 | 0.0911 ± 0.0002 | 0.0507 ± 0.0029 |
+| p8 | 64-80 | **+0.0606** ± 0.0502 | 0.0911 ± 0.0001 | 0.0606 ± 0.0024 |
+| p9 | 72-88 | **+0.1860** ± 0.0516 | 0.0914 ± 0.0005 | 0.0697 ± 0.0037 |
+| p10 | 80-96 | **+2.0611** ± 0.1108 | 0.0920 ± 0.0016 | 0.4009 ± 0.0249 |
+
+Attention spread: **0.0904 … 0.0920**, i.e. 1.7% of its own mean, against a uniform value of 1/11 = 0.0909. Occlusion importance spans -0.0051 … +2.0611.
+
+
+---
+
+## full (RevIN on, entropy on) — Jena, 5 seeds
 
 ### Spearman agreement with the occlusion ranking
 
@@ -111,6 +145,74 @@ Attention spread: **0.0904 … 0.0917**, i.e. 1.4% of its own mean, against a un
 | p10 | 80-96 | **+1.8904** ± 0.0985 | 0.0915 ± 0.0001 | 0.1602 ± 0.0231 |
 
 Attention spread: **0.0906 … 0.0915**, i.e. 1.0% of its own mean, against a uniform value of 1/11 = 0.0909. Occlusion importance spans +0.0189 … +1.8904.
+
+
+---
+
+## Headline model (no_revin: RevIN off, entropy on) — Beijing, 5 seeds
+
+### Spearman agreement with the occlusion ranking
+
+| | mean ρ | sd | per seed |
+|---|---|---|---|
+| temporal attention | +0.622 | 0.394 | +0.155, +0.236, +0.882, +0.991, +0.845 |
+| attention rollout | +0.389 | 0.263 | +0.318, +0.745, +0.473, +0.018, +0.391 |
+| **recency control** | +0.407 | 0.401 | -0.027, -0.036, +0.709, +0.709, +0.682 |
+
+- paired attention − recency: **+0.2145** (t-test p = 0.001)
+- paired rollout − recency: **-0.0182** (t-test p = 0.948)
+
+### Where the model actually looks
+
+| patch | hours | occlusion ΔMAE | temporal attention | rollout |
+|---|---|---|---|---|
+| p0 | 0-16 | **+0.0089** ± 0.0141 | 0.0907 ± 0.0003 | 0.0757 ± 0.0031 |
+| p1 | 8-24 | **-0.0004** ± 0.0194 | 0.0906 ± 0.0001 | 0.0675 ± 0.0037 |
+| p2 | 16-32 | **-0.0181** ± 0.0219 | 0.0903 ± 0.0001 | 0.0738 ± 0.0051 |
+| p3 | 24-40 | **-0.0172** ± 0.0203 | 0.0904 ± 0.0000 | 0.0733 ± 0.0039 |
+| p4 | 32-48 | **-0.0188** ± 0.0263 | 0.0905 ± 0.0001 | 0.0638 ± 0.0033 |
+| p5 | 40-56 | **-0.0202** ± 0.0199 | 0.0904 ± 0.0001 | 0.0720 ± 0.0032 |
+| p6 | 48-64 | **-0.0078** ± 0.0170 | 0.0908 ± 0.0000 | 0.0674 ± 0.0020 |
+| p7 | 56-72 | **+0.0043** ± 0.0457 | 0.0912 ± 0.0002 | 0.0641 ± 0.0022 |
+| p8 | 64-80 | **+0.0015** ± 0.0483 | 0.0909 ± 0.0002 | 0.0706 ± 0.0010 |
+| p9 | 72-88 | **+0.3243** ± 0.0693 | 0.0917 ± 0.0001 | 0.0764 ± 0.0031 |
+| p10 | 80-96 | **+2.0040** ± 0.2383 | 0.0925 ± 0.0004 | 0.2955 ± 0.0174 |
+
+Attention spread: **0.0903 … 0.0925**, i.e. 2.5% of its own mean, against a uniform value of 1/11 = 0.0909. Occlusion importance spans -0.0202 … +2.0040.
+
+
+---
+
+## no_revin+no_entropy (RevIN off, entropy off) — clean control for the regulariser — Beijing, 5 seeds
+
+### Spearman agreement with the occlusion ranking
+
+| | mean ρ | sd | per seed |
+|---|---|---|---|
+| temporal attention | +0.567 | 0.248 | +0.209, +0.618, +0.445, +0.718, +0.845 |
+| attention rollout | +0.429 | 0.217 | +0.500, +0.418, +0.691, +0.091, +0.445 |
+| **recency control** | +0.351 | 0.275 | +0.091, +0.300, +0.291, +0.818, +0.255 |
+
+- paired attention − recency: **+0.2164** (t-test p = 0.133)
+- paired rollout − recency: **+0.0782** (t-test p = 0.728)
+
+### Where the model actually looks
+
+| patch | hours | occlusion ΔMAE | temporal attention | rollout |
+|---|---|---|---|---|
+| p0 | 0-16 | **+0.0098** ± 0.0097 | 0.0906 ± 0.0002 | 0.0768 ± 0.0049 |
+| p1 | 8-24 | **+0.0036** ± 0.0184 | 0.0906 ± 0.0001 | 0.0636 ± 0.0029 |
+| p2 | 16-32 | **-0.0116** ± 0.0250 | 0.0900 ± 0.0001 | 0.0750 ± 0.0045 |
+| p3 | 24-40 | **-0.0189** ± 0.0236 | 0.0903 ± 0.0002 | 0.0722 ± 0.0025 |
+| p4 | 32-48 | **-0.0209** ± 0.0206 | 0.0905 ± 0.0002 | 0.0606 ± 0.0021 |
+| p5 | 40-56 | **-0.0150** ± 0.0257 | 0.0900 ± 0.0002 | 0.0712 ± 0.0033 |
+| p6 | 48-64 | **+0.0013** ± 0.0295 | 0.0907 ± 0.0002 | 0.0654 ± 0.0030 |
+| p7 | 56-72 | **-0.0075** ± 0.0276 | 0.0912 ± 0.0001 | 0.0617 ± 0.0034 |
+| p8 | 64-80 | **-0.0122** ± 0.0178 | 0.0908 ± 0.0002 | 0.0695 ± 0.0016 |
+| p9 | 72-88 | **+0.3572** ± 0.0900 | 0.0919 ± 0.0003 | 0.0748 ± 0.0027 |
+| p10 | 80-96 | **+2.3605** ± 0.1912 | 0.0934 ± 0.0005 | 0.3094 ± 0.0227 |
+
+Attention spread: **0.0900 … 0.0934**, i.e. 3.7% of its own mean, against a uniform value of 1/11 = 0.0909. Occlusion importance spans -0.0209 … +2.3605.
 
 
 ---

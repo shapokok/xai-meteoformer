@@ -1,89 +1,124 @@
 # Tuning budget (Reviewer 2)
 
-Reconstructed from the code and the recorded runs. No training.
+Reconstructed from the code and every recorded run:
+[results_clean.csv](analysis/results_clean.csv) (300 runs) plus the window
+sweep in `analysis/results_seqlen{24,48,192}.csv` (30 runs). All times are the
+repaired `train_time_s` on a Kaggle T4.
+
+> **Revision.** The first version of this file described the *published* study:
+> 138 runs, no search at all, Crossformer possibly under-provisioned. The
+> resubmission work added validation-based selection for several models and ran
+> Crossformer at full width. This version supersedes the old one; both old
+> claims are resolved below.
 
 ## Direct answer
 
-**There was no hyperparameter search. For any model.** Every one of the 138
-recorded runs used the same architecture-level hyperparameters, and the only
-value that ever varied is `lambda_ent`, which is an ablation (`no_entropy`), not
-a search. The number of trials per model is **1**.
+The published results used **no hyperparameter search for any model**: one
+configuration each, library defaults or capacity-matched settings. The
+resubmission adds a **small, validation-only selection** for the proposed model
+and for six baselines. Every selection uses the same rule — **the lowest mean
+validation loss over 5 seeds** — and the test set is scored once, after
+selection. Nothing is chosen on test.
 
-Evidence:
-
-- No search framework appears anywhere in the repo — no Optuna, Ray Tune,
-  hyperopt, or grid/random search code. The only occurrences of the word
-  "sweep" in `src/` are comments about sweeping *seeds*.
-- Across all 138 runs in [analysis/results_clean.csv](analysis/results_clean.csv)
-  the distinct values are: `seq_len` {96}, `pred_len` {24}, `d_model` {256},
-  `n_layers` {2}, `lr` {5e-4}, `lambda_ent` {0.0, 0.01}.
-- The Kaggle notebook loops over `MODELS × SEEDS` only, passing no
-  hyperparameter overrides.
+The budgets are **not equal**, and the paper must say so plainly: the proposed
+model was selected among 17 configurations, each baseline among 1–3.
 
 ## Per model
 
-| Model | Search space explored | Trials | Configuration used | Source of the defaults |
+Parameter counts are for Jena (19 input channels); Beijing differs by a few
+dozen parameters in the input and RevIN layers.
+
+| Model | Configs explored | Runs | GPU-h | Params, selected config | Params across explored configs | What was varied | Selected on validation |
+|---|---|---|---|---|---|---|---|
+| **XAI-MeteoFormer** | **17** | 170 | 21.7 | **1 892 475** | 1 755 512 – 1 892 513 | RevIN on/off; 6 ablations of `full`; 6 ablations of `no_revin`; window 24/48/96/192 | `no_revin`, L=96 (headline, fixed by decision); validation would pick L=24 — see below |
+| Crossformer | 3 | 20 | 5.0 | 1 695 908 | 1 695 908 – **10 608 420** | width 128×128 / 256×512 / 256×1024 | **128×128** (val 0.1489 < 0.1505 < 0.1524) |
+| Autoformer | 2 | 20 | 4.2 | 2 677 305 | 2 677 267 – 2 677 305 | `norm_variant` off/on | **on** (both datasets) |
+| DLinear | 2 | 20 | 0.4 | 4 656 | 4 656 – 4 694 | `norm_variant` off/on | off |
+| Informer | 2 | 20 | 1.6 | 2 867 475 | 2 867 475 – 2 867 513 | `norm_variant` off/on | off |
+| Transformer | 2 | 20 | 1.0 | 2 670 099 | 2 670 099 – 2 670 137 | `norm_variant` off/on | off on Jena, **on** on Beijing |
+| LSTM | 2 | 20 | 0.5 | 834 656 | 834 656 – 834 694 | `norm_variant` off/on (on = our RevIN) | **off** on Jena, on (historical) on Beijing |
+| PatchTST | 1 | 10 | 2.2 | 1 657 880 | — | — | published configuration |
+| TFT | 1 | 10 | 1.9 | 3 640 676 | — | — | published configuration |
+| TimesNet | 1 | 10 | 1.9 | 1 186 507 | — | — | published configuration |
+| iTransformer | 1 | 10 | 0.2 | 1 611 032 | — | — | published configuration |
+| **total** | | **330** | **40.6** | | | | |
+
+The selected configurations are what the main table now reports
+(`analysis/selection.py`, `paper/tables/main_*.tex`); the historical ones are
+in the appendix (`main_historical_*.tex`). RevIN adds exactly `2 × channels`
+affine parameters (38 on Jena), which is the whole difference between the two
+normalization variants of every baseline. The proposed model's range comes from
+its ablations: removing the multiscale block or the fusion gate drops it to
+1.76 M.
+
+5 seeds × 2 datasets per configuration throughout. PatchTST, TFT, TimesNet and
+iTransformer normalise inside their own published forward pass, so they have no
+normalization variant to select (see
+[tuning_symmetry_audit.md](analysis/tuning_symmetry_audit.md)).
+
+Normalization selection differs from the historical configuration in 4 of 10
+(model, dataset) pairs — Autoformer on both datasets and Transformer on Beijing
+move to `on`, LSTM on Jena moves to `off`. By decision, the main table now
+reports the selected variants and the historical ones move to the appendix. The proposed model still beats every
+selected variant by MAE with Diebold–Mariano p < 1e-7 after Holm
+([norm_selection.md](analysis/norm_selection.md)).
+
+## Shared configuration
+
+Every model: `pred_len`=24, `n_layers`=2, `dropout`=0.2, `lr`=5e-4, batch 64,
+AdamW (`weight_decay`=1e-4), OneCycleLR (`pct_start`=0.3), max 40 epochs,
+early stopping on validation loss (`patience`=6), gradient clipping at 1.0,
+Huber loss (`delta`=1.0) on globally standardised targets. `d_model`=256
+unless overridden: Crossformer 128/128 (published; 256 was also run), TimesNet
+32/32, TFT 128 — `MODEL_OVERRIDES` in
+[src/baselines/tslib_adapter.py](src/baselines/tslib_adapter.py). `seq_len`=96
+for everything except the window sweep of the proposed model.
+
+## The two findings that change the paper
+
+**1. Crossformer was not under-provisioned.** The earlier caveat — that it ran at
+128 wide while we ran at 256 — is resolved. At full width it has 4–6× our
+parameter count and is **worse** on validation *and* on test
+([crossformer_fullwidth.md](analysis/crossformer_fullwidth.md)):
+
+| Crossformer, Jena | params | val loss | MAE | RMSE |
 |---|---|---|---|---|
-| XAI-MeteoFormer | none | 1 | `d_model`=256, `n_heads`=8, `n_layers`=2, `patch_len`=16, `stride`=8, `dropout`=0.2, `lr`=5e-4, `batch`=64, AdamW + OneCycle, `lambda_cls`=0.2, `lambda_ent`=0.01 | our own `argparse` defaults, [src/train.py:352-390](src/train.py#L352-L390) |
-| DLinear | none | 1 | shared config | TSLib defaults via `make_configs` |
-| PatchTST | none | 1 | shared config, `patch_len`=16, `stride`=8 | TSLib defaults + our patch settings |
-| iTransformer | none | 1 | shared config | TSLib defaults |
-| Transformer | none | 1 | shared config, `e_layers`=2, `d_layers`=1, `factor`=3 | TSLib defaults |
-| Informer | none | 1 | shared config, `distil`=True | TSLib defaults |
-| Autoformer | none | 1 | shared config, `moving_avg`=25 | TSLib defaults |
-| Crossformer | none | 1 | **`d_model`=128, `d_ff`=128**, `seg_len`=12 | `MODEL_OVERRIDES`, sized for 8 GB VRAM |
-| TimesNet | none | 1 | **`d_model`=32, `d_ff`=32**, `e_layers`=2, `top_k`=3 | `MODEL_OVERRIDES`, sized for 8 GB VRAM |
-| TFT | none | 1 | **`d_model`=128, `n_heads`=4** | `MODEL_OVERRIDES`, sized for 8 GB VRAM |
-| LSTM | none | 1 | `hidden`=256, `layers`=2, `dropout`=0.2 | our own defaults |
+| 128×128 (published) | 1.70 M | **0.1489** | **3.107** | **5.166** |
+| 256×512 | 7.98 M | 0.1505 | 3.184 | 5.241 |
+| 256×1024 | 10.61 M | 0.1524 | 3.175 | 5.237 |
 
-Shared config for every model: `seq_len`=96, `pred_len`=24, `d_model`=256 unless
-overridden, `d_ff`=4·`d_model`, `n_layers`=2, `dropout`=0.2, `lr`=5e-4,
-`batch_size`=64, AdamW (`weight_decay`=1e-4), OneCycleLR (`pct_start`=0.3),
-max 40 epochs, early stopping on validation loss with `patience`=6, gradient
-clipping at 1.0, Huber loss (`delta`=1.0) on globally standardised targets.
+The published comparison stands, and the capacity question has a one-line
+answer for the reviewer.
 
-## Runs and wall-clock
+**2. Validation prefers a 24-hour window for the proposed model — the headline
+was not changed, per instruction.** ([window_sweep.md](analysis/window_sweep.md))
 
-All times from the repaired `train_time_s`
-([analysis/results_hygiene.md](analysis/results_hygiene.md) — the raw CSVs'
-timing column is corrupted). Kaggle T4.
+| L (h) | val loss, Jena | MAE, Jena | RMSE, Jena | val loss, Beijing | MAE, Beijing |
+|---|---|---|---|---|---|
+| **24** | **0.1389** | **2.940** | **5.147** | **0.1580** | **4.058** |
+| 48 | 0.1417 | 2.994 | 5.205 | 0.1590 | 4.107 |
+| 96 (headline) | 0.1437 | 3.025 | 5.267 | 0.1592 | 4.151 |
+| 192 | 0.1457 | 3.041 | 5.272 | 0.1648 | 4.234 |
 
-| Model | Runs | Mean min/run (Beijing) | Mean min/run (Jena) | Mean epochs |
-|---|---|---|---|---|
-| XAI-MeteoFormer | 38 | 5.1 | 10.6 | 19.6–20.9 |
-| Crossformer | 10 | 12.3 | 22.2 | 13.0 |
-| Autoformer | 10 | 5.9 | 23.4 | 12.9 |
-| PatchTST | 10 | 6.0 | 20.3 | 16.7 |
-| TFT | 10 | 7.1 | 16.1 | 10.2 |
-| TimesNet | 10 | 6.9 | 15.7 | 10.4 |
-| Informer | 10 | 2.5 | 5.8 | 12.6 |
-| Transformer | 10 | 1.8 | 4.1 | 9.2 |
-| iTransformer | 10 | 0.7 | 1.6 | 11.5 |
-| LSTM | 10 | 0.6 | 1.1 | 10.5 |
-| DLinear | 10 | 0.7 | 1.0 | 18.6 |
-| **total** | **138** | | | **18.8 GPU-h** |
+Under the same rule that picked `no_revin`, validation would pick L=24 on both
+datasets. At L=24 the Jena RMSE (5.147) is **below Crossformer's 5.166** — the
+one metric we currently lose. This is the mechanism found by
+[occlusion_time.md](analysis/occlusion_time.md) and
+[block_missing.md](analysis/block_missing.md): the model uses the last ~16 h
+and the rest of a 96 h window is noise to it.
 
-## How to present this, and the honest caveat
+Adopting L=24 is a legitimate validation-based choice, but it is a **decision
+for the authors**, not an analysis step, and it has a price in budget
+asymmetry: the proposed model would then be selected over window length too,
+which no baseline was. The honest options are (a) keep L=96 and report the sweep
+as mechanism evidence, or (b) adopt L=24 and give the baselines the same window
+sweep before claiming the RMSE result.
 
-The fair framing is: *no model received any tuning; every model was trained
-under an identical protocol with library-default or capacity-matched settings,
-so the comparison is a controlled one rather than a tuned-vs-tuned one.* That is
-a legitimate and increasingly common protocol, and it is stronger than a
-comparison where only the proposed model was tuned.
+## How to present this
 
-The caveat must be stated in the same breath, because a reviewer will raise it:
-a no-tuning protocol can disadvantage baselines whose published configurations
-differ from ours. Three specifics worth naming:
-
-1. **Crossformer, TimesNet and TFT ran at reduced width** (128/32/128 instead of
-   256) to fit 8 GB of VRAM, while our model ran at full 256. Crossformer is the
-   closest competitor, so this cuts against us being accused of favouring
-   ourselves — but it also means Crossformer's numbers are not its best possible
-   numbers, and its RMSE advantage on Jena was obtained *while under-provisioned*.
-2. **PatchTST was given our `patch_len`/`stride`**, not the values from its own
-   paper.
-3. `lr`=5e-4 with OneCycle is our choice, applied to every model including those
-   whose reference implementations use a different schedule.
-
-None of this requires new runs to state. It requires one honest paragraph in the
-experimental-setup section.
+The defensible sentence is: *the published baselines were run in their
+published configurations; in the resubmission, normalization (five baselines)
+and width (Crossformer) were additionally selected on validation, and the
+proposed model's architecture variants were selected on validation under the
+same rule.* Then state the counts — 17 configurations for ours, 1–3 per
+baseline — rather than leaving the reviewer to reconstruct them.

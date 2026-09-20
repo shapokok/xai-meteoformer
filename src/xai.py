@@ -154,6 +154,13 @@ def main():
     p.add_argument("--ablation", default="auto",
                    help="architecture variant of the checkpoint; 'auto' reads "
                         "it from the filename")
+    p.add_argument("--norm_variant", default="auto",
+                   choices=["auto", "on", "off"],
+                   help="per-window normalization of a BASELINE checkpoint. "
+                        "'auto' reads it from the file name: a '_normon' / "
+                        "'_normoff' tag means that variant, no tag means the "
+                        "historical configuration. Must match the checkpoint, "
+                        "or load_state_dict fails on the RevIN keys.")
     p.add_argument("--no_shap", action="store_true",
                    help="skip GradientSHAP; rank by permutation importance")
     p.add_argument("--exclude_time", action="store_true",
@@ -206,9 +213,16 @@ def main():
             n_layers=args.n_layers, dropout=args.dropout,
             **ABLATIONS[abl]).to(device)
     else:
+        nv = args.norm_variant
+        if nv == "auto":
+            b = os.path.basename(args.ckpt)
+            nv = ("on" if "_normon_" in b else
+                  "off" if "_normoff_" in b else None)   # None = historical
+        print(f"building {args.model} with norm_variant={nv or 'historical'}")
         model = build_baseline(args.model, args, N, test.target_idx,
                                test.target_names,
-                               tslib_path=args.tslib_path).to(device)
+                               tslib_path=args.tslib_path,
+                               norm_variant=nv).to(device)
     model.load_state_dict(torch.load(args.ckpt, map_location=device))
     model.eval()
 

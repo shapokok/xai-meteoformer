@@ -25,6 +25,8 @@ import sys
 import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, "analysis"))
+from selection import selected_suffix  # noqa: E402
 OURS = "XAI-MeteoFormer"
 # Every model now runs on MPS: analysis/xai_patches.py works around the
 # Tensor.unfold bug and the in-place division that blocked GradientSHAP.
@@ -62,9 +64,11 @@ def main():
         for m in models:
             abls = (a.ablations if (m == OURS and a.ablations)
                     else (["no_revin"] if m == OURS else ["full"]))
+            # baselines are explained in the variant the main table reports
+            sfx = "" if m == OURS else selected_suffix(m, ds)
             for abl in abls:
                 for s in a.seeds:
-                    f = os.path.join(ck, f"{m}_{ds}_{abl}_s{s}.pt")
+                    f = os.path.join(ck, f"{m}_{ds}_{abl}{sfx}_s{s}.pt")
                     if os.path.exists(f):
                         jobs.append((ds, m, abl, s, f))
 
@@ -72,7 +76,7 @@ def main():
     t0 = time.time()
     failed = []
     for i, (ds, m, abl, s, f) in enumerate(jobs, 1):
-        tag = f"{m}_{ds}_{abl}_s{s}"
+        tag = os.path.basename(f)[:-3]
         if os.path.exists(os.path.join(npz_dir, f"{tag}_xai.npz")):
             print(f"[{i}/{len(jobs)}] skip {tag}", flush=True)
             continue

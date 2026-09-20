@@ -11,18 +11,26 @@ window, max_h |y_true[h] - y_last_input|, computed from ground truth
 only -- it does not depend on any model.
 """
 
+import argparse
 import json
 import os
 
 import numpy as np
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Defaults reproduce analysis/error_decomposition.md exactly. They are module
+# level because the report text quotes them; --dataset / --variants override
+# them for a new configuration, e.g. checkpoints trained with an MSE loss
+# (tag suffix "_mse") or with the block augmentation ("_augblk0.5").
+#
+# NOTE: this script runs no model. It reads predictions/*.npy, so it needs no
+# GPU and can run while something else is using the accelerator.
 DS = "jena"
 SEEDS = range(5)
 VARIANTS = [
-    ("XAI-MeteoFormer", "full", "Ours (RevIN)"),
-    ("XAI-MeteoFormer", "no_revin", "Ours (no_revin)"),
-    ("Crossformer", "full", "Crossformer"),
+    ("XAI-MeteoFormer", "no_revin", "", "Ours (no_revin)"),
+    ("XAI-MeteoFormer", "full", "", "Ours (RevIN)"),
+    ("Crossformer", "full", "", "Crossformer"),
 ]
 HORIZONS = [1, 6, 12, 24]
 L, H = 96, 24
@@ -41,9 +49,15 @@ def load():
     return names, true, last
 
 
-def preds(model, abl):
-    return [np.load(f"{ROOT}/predictions/{model}_{DS}_{abl}_s{s}_pred.npy").astype(np.float64)
-            for s in SEEDS]
+def preds(model, abl, sfx=""):
+    """per-seed test predictions; sfx is the tag suffix written by train.py"""
+    out = []
+    for s in SEEDS:
+        f = f"{ROOT}/predictions/{model}_{DS}_{abl}{sfx}_s{s}_pred.npy"
+        if not os.path.exists(f):
+            raise FileNotFoundError(f)
+        out.append(np.load(f).astype(np.float64))
+    return out
 
 
 def ms(v):
@@ -57,8 +71,8 @@ def fmt(m, s):
 
 def main():
     names, true, last = load()
-    P = {lab: preds(m, a) for m, a, lab in VARIANTS}
-    labels = [lab for _, _, lab in VARIANTS]
+    P = {lab: preds(m, a, sfx) for m, a, sfx, lab in VARIANTS}
+    labels = [lab for *_, lab in VARIANTS]
     out = []
     W = out.append
 
@@ -179,12 +193,12 @@ def main():
             W(f"| {lab} | " + " | ".join(
                 fmt(v[:, d].mean(), v[:, d].std(ddof=1)) for d in range(10)) + " |")
         # deltas
-        a = np.stack([t[idx] for t in tab["Ours (no_revin)"]])
-        b = np.stack([t[idx] for t in tab["Ours (RevIN)"]])
-        cf = np.stack([t[idx] for t in tab["Crossformer"]])
-        W("| **no_revin − RevIN** | " + " | ".join(
+        a = np.stack([t[idx] for t in tab[labels[0]]])
+        b = np.stack([t[idx] for t in tab[labels[1]]])
+        cf = np.stack([t[idx] for t in tab[labels[2]]])
+        W(f"| **{labels[0]} − {labels[1]}** | " + " | ".join(
             f"{(a-b)[:, d].mean():+.3f}" for d in range(10)) + " |")
-        W("| **no_revin − Crossformer** | " + " | ".join(
+        W(f"| **{labels[0]} − {labels[2]}** | " + " | ".join(
             f"{(a-cf)[:, d].mean():+.3f}" for d in range(10)) + " |")
         W("")
 
@@ -260,8 +274,8 @@ def main():
         mses[lab] = m
         W(f"| {lab} | " + " | ".join(f"{m[c]:.3f}" for c in range(4))
           + f" | {m.mean():.3f} | {np.sqrt(m.mean()):.3f} |")
-    d = mses["Ours (no_revin)"] - mses["Crossformer"]
-    W("| **no_revin − Crossformer** | " + " | ".join(f"{d[c]:+.3f}" for c in range(4))
+    d = mses[labels[0]] - mses[labels[2]]
+    W(f"| **{labels[0]} − {labels[2]}** | " + " | ".join(f"{d[c]:+.3f}" for c in range(4))
       + f" | {d.mean():+.3f} | — |")
     W("| **contribution to aggregate MSE gap** | "
       + " | ".join(f"{d[c]/4:+.3f}" for c in range(4))
@@ -280,8 +294,8 @@ def main():
         rh[lab] = v
         W(f"| {lab} | " + " | ".join(fmt(v[:, d].mean(), v[:, d].std(ddof=1))
                                      for d in range(10)) + " |")
-    g = rh["Ours (no_revin)"] - rh["Crossformer"]
-    W("| **no_revin − Crossformer** | " + " | ".join(f"{g[:, d].mean():+.3f}"
+    g = rh[labels[0]] - rh[labels[2]]
+    W(f"| **{labels[0]} − {labels[2]}** | " + " | ".join(f"{g[:, d].mean():+.3f}"
                                                     for d in range(10)) + " |")
     W("")
 
@@ -341,9 +355,28 @@ def main():
         W(f"| {lab} | {fmt(*ms(base))} | {fmt(*ms(resc))} |")
     W("")
     os.makedirs(f"{ROOT}/analysis", exist_ok=True)
-    open(f"{ROOT}/analysis/_tables.md", "w").write("\n".join(out))
+    open(OUT, "w").write("\n".join(out))
     print("\n".join(out))
 
 
-if __name__ == "__main__":
+def cli():
+    global DS, SEEDS, VARIANTS, OUT
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--dataset", default=DS)
+    ap.add_argument("--seeds", type=int, nargs="*", default=list(SEEDS))
+    ap.add_argument("--variants", nargs="*", default=None,
+                    help="model|ablation|suffix|label , first must be the "
+                         "variant under test, third the comparison baseline")
+    ap.add_argument("--out", default=os.path.join(ROOT, "analysis", "_tables.md"))
+    a = ap.parse_args()
+    DS, SEEDS, OUT = a.dataset, a.seeds, a.out
+    if a.variants:
+        VARIANTS = [tuple(v.split("|")) for v in a.variants]
+        assert all(len(v) == 4 for v in VARIANTS), "need model|ablation|suffix|label"
     main()
+
+
+OUT = os.path.join(ROOT, "analysis", "_tables.md")
+
+if __name__ == "__main__":
+    cli()

@@ -53,21 +53,24 @@ def main():
       "— is included as a baseline explanation. Any attention mechanism that "
       "does not beat it is contributing nothing.\n")
 
-    W("**Which rows to compare.** `no_entropy` is defined relative to `full` "
-      "(RevIN **on**), not to the headline `no_revin`. The effect of the entropy "
-      "regulariser is `full` vs `no_entropy`, which differ in `lambda_ent` "
-      "alone. Setting `no_entropy` against the headline changes RevIN too and "
-      "is not a test of the regulariser — an earlier reading of this file did "
-      "exactly that and is withdrawn; see "
+    W("**Which rows to compare.** The entropy regulariser is isolated only by "
+      "variants that differ in `lambda_ent` alone. Primary control, on the "
+      "published configuration: `no_revin` vs `no_revin+no_entropy` (both RevIN "
+      "off). Secondary: `full` vs `no_entropy` (both RevIN on). Setting "
+      "`no_entropy` against the headline changes RevIN too — an earlier reading "
+      "of this file did exactly that and is withdrawn; see "
       "[xai_fidelity_v2.md](analysis/xai_fidelity_v2.md).\n")
-    for abl, name in [("no_revin", "Headline model (no_revin, RevIN off)"),
-                      ("full", "full (RevIN on, entropy on) — control for no_entropy"),
-                      ("no_entropy", "no_entropy (RevIN on, entropy off)")]:
-        d = d0[(d0.dataset == "jena") & (d0.ablation == abl)]
+    variants = [("no_revin", "Headline model (no_revin: RevIN off, entropy on)"),
+                ("no_revin+no_entropy", "no_revin+no_entropy (RevIN off, entropy off) — "
+                                        "clean control for the regulariser"),
+                ("full", "full (RevIN on, entropy on)"),
+                ("no_entropy", "no_entropy (RevIN on, entropy off)")]
+    for ds, dtitle in (("jena", "Jena"), ("beijing_aotizhongxin", "Beijing")):
+      for abl, name in variants:
+        d = d0[(d0.dataset == ds) & (d0.ablation == abl)]
         if d.empty:
-            W(f"\n---\n\n## {name}\n\n_not computed yet_\n")
             continue
-        W(f"\n---\n\n## {name} — Jena, {len(d)} seeds\n")
+        W(f"\n---\n\n## {name} — {dtitle}, {len(d)} seeds\n")
         W("### Spearman agreement with the occlusion ranking\n")
         W("| | mean ρ | sd | per seed |")
         W("|---|---|---|---|")

@@ -257,7 +257,9 @@ Training uses `HuberLoss(delta=1.0)` on globally standardised targets (train sd:
 | Ours (no_revin) | 0.070 | 0.004 | 0.089 | 0.027 | 0.159 |
 | Crossformer | 0.065 | 0.009 | 0.078 | 0.026 | 0.149 |
 
-About 93 % of residuals sit in the quadratic region, so the objective is effectively MSE for every model here. The loss does not explain an MAE-good / RMSE-bad profile.
+About 93 % of residuals sit in the quadratic region, so the objective is effectively MSE for every model here. That settles the **cross-model** question — every model trains under the same objective, so the loss cannot explain why we differ from Crossformer.
+
+It does **not** follow that a pure MSE loss would change nothing for us. Huber down-weights to linear exactly the ~7 % of residuals outside δ, and that tail is where RMSE lives: the worst 1 % of residuals carry ~27 % of the total squared error (§4). Training with MSE should therefore pull the RH over-dispersion of §7 toward the MSE-optimal dispersion. When such a run is available, the quantities to read are the **RH sd ratio** and the **per-channel MSE**, not the aggregate RMSE alone — the aggregate can move for the wrong reason, since it is an unweighted mean dominated by RH.
 
 ## 7. What does explain it: RH dispersion
 

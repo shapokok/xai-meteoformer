@@ -1,39 +1,47 @@
-"""Explanation fidelity for all 11 models on 5 seeds, uniformly (P0-3, P0-4).
+"""Explanation fidelity for all 11 models on 5 seeds (P0-3, P0-4).
 
-Reads xai_v2_out/xai_metrics.csv, produced by analysis/xai_backfill.py
-under identical conditions for every model: 40 test batches x 64 = 2560
-explained windows, GradientSHAP with 16 samples on 10 batches, the same
-fidelity k-grid, physical channels only, permutation RNG seeded by the
-model seed. Seed i of every model therefore sees the same windows and the
-same permutation stream, which is what makes the per-seed pairing in the
-tests below a genuine pairing rather than an index match.
+PRIMARY metric: deterministic fidelity (analysis/fidelity_deterministic.py):
+each perturbed channel is replaced by its own per-window mean, the reference
+is fixed and shared by every model, so a checkpoint always gets the same
+number and the spread across seeds is model variance only.
 
-Replaces the published fidelity table, which set a 5-seed mean for the
-proposed model against single-seed points for six baselines and had no
-entry at all for DLinear, Transformer, Informer and Autoformer.
+APPENDIX: the permutation metric of src/xai.py, which carries ~0.18 sd of
+Monte-Carlo noise on a single fixed checkpoint at the current budget.
 
-Outputs -> analysis/xai_fidelity_v2.md, paper/tables/fidelity_{ds}.tex
+Baselines appear in the variant the main table reports (analysis/selection.py).
+
+Inputs  analysis/fidelity_det.csv          primary
+        xai_v2_out/xai_metrics.csv         appendix (permutation)
+        analysis/fidelity_estimator_noise.csv
+        analysis/occlusion_time.csv        time axis (also deterministic)
+Outputs analysis/xai_fidelity_v2.md
+        paper/tables/fidelity_{ds}.tex              primary
+        paper/tables/fidelity_perm_appendix_{ds}.tex appendix
 """
 
 import os
 import re
+import sys
 
 import numpy as np
 import pandas as pd
 from scipy import stats
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OURS, LABEL = "XAI-MeteoFormer", "MeteoFormer"
-HEAD = "no_revin"
+sys.path.insert(0, os.path.join(ROOT, "analysis"))
+from selection import selected_suffix  # noqa: E402
+
+OURS, LABEL, HEAD = "XAI-MeteoFormer", "MeteoFormer", "no_revin"
+DATASETS = (("jena", "Jena"), ("beijing_aotizhongxin", "Beijing (Aotizhongxin)"))
 
 
 def holm(p):
     p = np.asarray(p, float)
-    o = np.argsort(p)
-    adj = np.empty_like(p)
+    adj = np.full_like(p, np.nan)
+    ok = np.where(~np.isnan(p))[0]
     run = 0.0
-    for i, j in enumerate(o):
-        run = max(run, (len(p) - i) * p[j])
+    for i, j in enumerate(ok[np.argsort(p[ok])]):
+        run = max(run, (len(ok) - i) * p[j])
         adj[j] = min(run, 1.0)
     return adj
 
@@ -43,305 +51,399 @@ def ms(v, k=3):
     v = v[~np.isnan(v)]
     if len(v) == 0:
         return "—"
-    return f"{v.mean():.{k}f} ± {v.std(ddof=1):.{k}f}" if len(v) > 1 else f"{v.mean():.{k}f}"
+    return (f"{v.mean():.{k}f} ± {v.std(ddof=1):.{k}f}" if len(v) > 1
+            else f"{v.mean():.{k}f}")
 
 
-def load():
-    d = pd.read_csv(os.path.join(ROOT, "xai_v2_out", "xai_metrics.csv"))
-    d["seed"] = d.ckpt.map(lambda s: int(re.search(r"_s(\d+)\.pt$", s).group(1)))
+def tex(v):
+    v = np.asarray(v, float)
+    v = v[~np.isnan(v)]
+    return (f"{v.mean():.3f} $\\pm$ {v.std(ddof=1):.3f}" if len(v) > 1
+            else ("--" if len(v) == 0 else f"{v.mean():.3f}"))
+
+
+def nm(m, abl=None):
+    if m != OURS:
+        return m
+    return f"**{LABEL}**" if abl in (None, HEAD) else f"{LABEL} ({abl})"
+
+
+def load_det():
+    f = os.path.join(ROOT, "analysis", "fidelity_det.csv")
+    if not os.path.exists(f):
+        return pd.DataFrame()
+    d = pd.read_csv(f)
+    d["suffix"] = d["suffix"].fillna("")
     return d
 
 
+def selected(d, ds):
+    """rows for the models/variants the main table reports"""
+    x = d[d.dataset == ds]
+    keep = x.apply(lambda r: (r.ablation == HEAD) if r.model == OURS
+                   else (r.ablation == "full"
+                         and r.suffix == selected_suffix(r.model, ds)), axis=1)
+    return x[keep]
+
+
+def load_perm():
+    d = pd.read_csv(os.path.join(ROOT, "xai_v2_out", "xai_metrics.csv"))
+    d["seed"] = d.ckpt.map(lambda s: int(re.search(r"_s(\d+)\.pt$", s).group(1)))
+    d["suffix"] = d.ckpt.map(lambda s: (re.search(r"(_norm(?:on|off))_s\d+\.pt$", s)
+                                        or [None, ""])[1] if "_norm" in s else "")
+    return d
+
+
+def paired_vs_ours(x, col):
+    ours = x[x.model == OURS].set_index("seed")[col]
+    recs = []
+    for m, g in x[x.model != OURS].groupby("model"):
+        b = g.set_index("seed")[col]
+        s = sorted(set(ours.index) & set(b.index))
+        if len(s) < 2:
+            continue
+        recs.append((m, float((ours.loc[s] - b.loc[s]).mean()),
+                     stats.ttest_rel(ours.loc[s], b.loc[s]).pvalue, len(s)))
+    adj = holm([r[2] for r in recs])
+    return [(m, dm, p, pa, n) for (m, dm, p, n), pa in zip(recs, adj)]
+
+
+def write_tex(path, body, caption, label):
+    with open(path, "w") as f:
+        f.write("\\begin{table}[H]\n\\caption{" + caption + "}\n")
+        f.write("\\label{" + label + "}\n" + body + "\n\\end{table}\n")
+
+
 def main():
-    d = load()
-    old = pd.read_csv(os.path.join(ROOT, "xai_metrics.csv"))
+    det = load_det()
     L = []
     W = L.append
     W("# Explanation fidelity, all 11 models × 5 seeds (P0-3, P0-4)\n")
     W("Reviewer 1, Major #4 and #7. Produced by "
-      "[analysis/xai_backfill.py](analysis/xai_backfill.py) and "
-      "[analysis/xai_fidelity_v2.py](analysis/xai_fidelity_v2.py).\n")
-    W("## What changed against the published table\n")
-    W("The published fidelity table set a **5-seed mean** for our model against "
-      "**single-seed points** for six baselines, and had **no entry at all** "
-      "for DLinear, Transformer, Informer and Autoformer. Everything is now "
-      "recomputed from scratch under identical conditions for all 11 models:\n")
-    W("- 5 seeds per model, both datasets — 110 runs, none failed;")
-    W("- 2 560 explained test windows (40 batches × 64), the same windows for "
-      "every model;")
-    W("- GradientSHAP with 16 samples on 10 batches for every model;")
-    W("- the same fidelity k-grid, physical channels only;")
-    W("- the permutation RNG seeded by the model seed, so seed *i* of every "
-      "model sees the same permutation stream — the per-seed pairing in the "
-      "tests below is a real pairing, not an index coincidence.\n")
-    W("**SHAP now exists for every model.** It was missing for PatchTST, "
-      "iTransformer and TFT in the published table because their normalisation "
-      "divides in place (`x_enc /= stdev`), which breaks input gradients; "
-      "`src/xai.py` caught the error and silently fell back to permutation "
-      "importance. The harness rewrites that one line out of place at runtime "
-      "(forward pass bit-identical, checked with `torch.equal`); see "
-      "[analysis/xai_patches.py](analysis/xai_patches.py). Neither `src/` nor "
-      "the pinned TSLib is modified on disk.\n")
-    nz = os.path.join(ROOT, "analysis", "fidelity_estimator_noise.csv")
-    if os.path.exists(nz):
-        nz = pd.read_csv(nz)
-        W("## First: the fidelity estimator is dominated by its own noise\n")
-        W("To separate model differences from Monte-Carlo noise, **one** "
-          "checkpoint per model (seed 0) was explained five times with RNG "
-          "seeds 0–4 and nothing else changed "
-          "([fidelity_estimator_noise.csv](analysis/fidelity_estimator_noise.csv), "
-          "reproducer [fidelity_estimator_noise.sh](analysis/fidelity_estimator_noise.sh)):\n")
-        W("| Model (one fixed checkpoint) | SHAP-ranked | permutation-ranked | "
-          "attention-ranked |")
-        W("|---|---|---|---|")
-        for m, g in nz.groupby("model"):
-            nm_ = f"**{LABEL}**" if m == OURS else m
-            W(f"| {nm_} | {ms(g.fidelity_gain_shap_rel)} | "
-              f"{ms(g.fidelity_gain_perm_rel)} | {ms(g.fidelity_gain_attn_rel)} |")
-        W("")
-        W("The spread on a **single fixed model** (sd ≈ 0.17–0.18) is as large "
-          "as the spread across five independently trained seeds in the tables "
-          "below (0.18–0.19). Almost all of the seed-to-seed variance is "
-          "estimator noise, not model difference. Two consequences:\n")
-        W("1. **The published sd of 0.037 for our model was an artefact.** The "
-          "published runs evidently used the same RNG stream for every "
-          "checkpoint: for seed 0 the old and new permutation rankings agree "
-          "exactly (ρ = 1.000), for seed 1 they do not (ρ = 0.816). The same "
-          "random draw repeated five times hides the estimator's noise, and the "
-          "published mean of 0.523 is one draw of it.")
-        W("2. **At the current budget (2 560 windows, one permutation per "
-          "batch) the metric cannot separate models whose fidelity differs by "
-          "less than roughly 0.2.** Rankings inside that band are noise.\n")
-        W("The fix is a lower-variance estimator, applied uniformly: replace "
-          "the random permutation of the top-k channels with a deterministic "
-          "replacement by each channel's own window mean — the same device "
-          "used for the time axis in "
-          "[occlusion_time.md](analysis/occlusion_time.md) — which has no "
-          "Monte-Carlo noise at all. That is a change of metric definition, so "
-          "it is proposed here, not applied.\n")
+      "[fidelity_deterministic.py](analysis/fidelity_deterministic.py) (primary), "
+      "[xai_backfill.py](analysis/xai_backfill.py) (appendix) and "
+      "[xai_fidelity_v2.py](analysis/xai_fidelity_v2.py).\n")
+    W("## Summary of what changed against the published table\n")
+    W("- The published table set a 5-seed mean for our model against single-seed "
+      "points for six baselines and had no entry for DLinear, Transformer, "
+      "Informer and Autoformer. **Every model now has 5 seeds under identical "
+      "conditions, on both datasets.**")
+    W("- **SHAP now exists for every model.** It was missing for PatchTST, "
+      "iTransformer and TFT because their normalisation divides in place "
+      "(`x_enc /= stdev`); `src/xai.py` silently fell back to permutation "
+      "importance. The harness rewrites that line out of place at runtime, "
+      "forward pass bit-identical ([xai_patches.py](analysis/xai_patches.py)).")
+    W("- **Baselines are explained in the normalization variant the main table "
+      "reports**, selected on validation loss "
+      "([selection.py](analysis/selection.py)): Autoformer (both datasets) and "
+      "Transformer (Beijing) with RevIN, LSTM (Jena) without it.")
+    W("- **The primary metric is now deterministic.** See next section.\n")
 
-    W("`fidelity gain (rel)` = relative error increase when the top-ranked "
-      "channels are perturbed, beyond what a random ranking produces. Higher = "
-      "the ranking identifies channels the model actually depends on.\n")
+    # ------------------------------------------------------------ metric
+    W("## The primary metric: deterministic fidelity\n")
+    W("The permutation metric of `src/xai.py` has two sources of Monte-Carlo "
+      "noise: the perturbation (a random time permutation of each perturbed "
+      "channel) and the reference (a **single** random channel ordering). On one "
+      "fixed checkpoint re-explained with five RNG seeds its sd is ~0.18 "
+      "([fidelity_estimator_noise.csv](analysis/fidelity_estimator_noise.csv)) — "
+      "as large as the spread across five trained seeds, so at the current "
+      "budget it cannot separate models closer than ~0.2.\n")
+    W("The deterministic metric keeps the definition and removes both sources:\n")
+    W("| | permutation metric (appendix) | deterministic metric (primary) |")
+    W("|---|---|---|")
+    W("| perturbation of a channel | random permutation along time | "
+      "replacement by its own per-window mean |")
+    W("| reference curve | one random channel ordering | k = 1: exact mean over "
+      "channels; k ≥ 2: mean over 20 fixed orderings, shared by every model |")
+    W("| model-agnostic ranking | permutation importance (random) | "
+      "single-channel window-mean occlusion (deterministic) |")
+    W("| SHAP | seeded by the model seed | same function and budget, torch "
+      "seeded to 0 for every run |")
+    W("| scoring | ks = 0,1,2,3,5,8; gain = mean(ranked − reference) over k>0; "
+      "rel = gain / base MAE | identical |\n")
+    W("**Determinism, verified.** The same checkpoint explained twice produces "
+      "bit-identical importances and curves (`np.array_equal` on every array). "
+      "Any spread across seeds in the tables below is therefore model variance, "
+      "not estimator noise. The 20 reference orderings are a fixed sample, not "
+      "the exact expectation over all orderings; being identical for every "
+      "model, they cannot favour one.\n")
+    W("Column meaning: **SHAP-ranked** is the fidelity of the model's GradientSHAP "
+      "ranking — the cross-model comparison of explanation quality. "
+      "**Occlusion-ranked** ranks channels by the same perturbation that scores "
+      "them, so it is close to an upper reference, not a fair comparison. "
+      "**ρ(SHAP, occl)** is the Spearman agreement of the two rankings.\n")
 
-    for ds, title in (("jena", "Jena"), ("beijing_aotizhongxin",
-                                         "Beijing (Aotizhongxin)")):
-        x = d[(d.dataset == ds) & ((d.model != OURS) | (d.ablation == HEAD))]
+    if det.empty:
+        W("_analysis/fidelity_det.csv not found — run fidelity_deterministic.py._\n")
+    for ds, title in DATASETS:
+        x = selected(det, ds) if not det.empty else det
         if x.empty:
             continue
         W(f"\n---\n\n## {title}\n")
-        W("### Fidelity by ranking method, mean ± sd over 5 seeds\n")
-        W("| Model | n | SHAP-ranked | permutation-ranked | "
-          "Spearman(SHAP, perm) |")
-        W("|---|---|---|---|---|")
-        rows = []
-        for m, g in x.groupby("model"):
-            rows.append((g.fidelity_gain_shap_rel.mean(), m, g))
-        for _, m, g in sorted(rows, key=lambda r: -r[0]):
-            nm = f"**{LABEL}**" if m == OURS else m
-            W(f"| {nm} | {g.seed.nunique()} | {ms(g.fidelity_gain_shap_rel)} | "
-              f"{ms(g.fidelity_gain_perm_rel)} | {ms(g.agree_shap_perm_rho)} |")
-        W("")
+        W("### Deterministic fidelity, mean ± sd over seeds\n")
+        W("| Model | variant | n | SHAP-ranked | occlusion-ranked | ρ(SHAP, occl) |")
+        W("|---|---|---|---|---|---|")
+        rows = sorted(((g.det_gain_shap_rel.mean(), m, g)
+                       for m, g in x.groupby("model")), key=lambda r: -r[0])
+        for _, m, g in rows:
+            var = "headline" if m == OURS else (g.suffix.iloc[0].lstrip("_") or "historical")
+            W(f"| {nm(m)} | {var} | {g.seed.nunique()} | {ms(g.det_gain_shap_rel)} | "
+              f"{ms(g.det_gain_occl_rel)} | {ms(g.det_agree_shap_occl_rho)} |")
         o = x[x.model == OURS]
-        if "fidelity_gain_attn_rel" in o and o.fidelity_gain_attn_rel.notna().any():
-            W(f"**{LABEL}, built-in attention ranking:** fidelity "
-              f"{ms(o.fidelity_gain_attn_rel)}; Spearman(attention, SHAP) "
-              f"{ms(o.get('agree_attn_shap_rho', pd.Series(dtype=float)))}; "
-              f"Spearman(attention, permutation) "
-              f"{ms(o.get('agree_attn_perm_rho', pd.Series(dtype=float)))}.\n")
+        if len(o) and "det_gain_attn_rel" in o:
+            W(f"\n**{LABEL}, built-in attention ranking:** fidelity "
+              f"{ms(o.det_gain_attn_rel)}; Spearman(attention, SHAP) "
+              f"{ms(o.det_agree_attn_shap_rho)}; Spearman(attention, occlusion) "
+              f"{ms(o.det_agree_attn_occl_rho)}.\n")
 
-        W("### Paired tests against our model (SHAP-ranked fidelity)\n")
-        W("Paired by seed. Paired t-test, Holm-corrected over the 10 baselines; "
-          "Wilcoxon signed-rank alongside. **With n = 5 the smallest two-sided "
-          "Wilcoxon p attainable is 0.0625**, so it cannot reach 0.05 whatever "
-          "the effect; it is reported for completeness. Positive Δ = our "
-          "model's SHAP ranking is more faithful.\n")
-        W("| Baseline | Δ (ours − baseline) | paired t p | Holm | Wilcoxon p |")
+        W("### Paired tests against our model (SHAP-ranked, deterministic)\n")
+        W("Paired by seed, paired t-test, Holm over the 10 baselines. Wilcoxon is "
+          "not shown: with n = 5 its smallest two-sided p is 0.0625. Positive Δ = "
+          "our model's SHAP ranking is more faithful.\n")
+        W("| Baseline | Δ (ours − baseline) | paired t p | Holm | n |")
         W("|---|---|---|---|---|")
-        ours = o.set_index("seed").fidelity_gain_shap_rel
-        recs = []
-        for m, g in x[x.model != OURS].groupby("model"):
-            b = g.set_index("seed").fidelity_gain_shap_rel
-            s = sorted(set(ours.index) & set(b.index))
-            dv = ours.loc[s].values - b.loc[s].values
-            tp = stats.ttest_rel(ours.loc[s], b.loc[s]).pvalue
-            try:
-                wp = stats.wilcoxon(ours.loc[s], b.loc[s]).pvalue
-            except ValueError:
-                wp = np.nan
-            recs.append((m, dv.mean(), tp, wp))
-        adj = holm([r[2] for r in recs])
-        for (m, dm, tp, wp), pa in sorted(zip(recs, adj), key=lambda z: z[0][1]):
+        res = paired_vs_ours(x, "det_gain_shap_rel")
+        for m, dm, p, pa, n in sorted(res, key=lambda r: r[1]):
             star = " **\\***" if pa < 0.05 else ""
-            W(f"| {m} | {dm:+.3f} | {tp:.3g} | {pa:.3g}{star} | {wp:.3g} |")
-        W("")
-        n_sig = sum(pa < 0.05 for pa in adj)
-        n_pos = sum(r[1] > 0 for r in recs)
-        W(f"Our model's SHAP ranking is more faithful than {n_pos} of 10 "
-          f"baselines on average; **{n_sig} of 10** differences survive Holm.\n")
-
-        # old vs new, for the channels the paper printed
-        oo = old[(old.dataset == ds) & (old.exclude_time == True)]
-        if len(oo) and "fidelity_gain_perm_rel" in oo:
-            W("### Published table vs recomputed (permutation-ranked)\n")
-            W("| Model | published (seeds) | recomputed, 5 seeds |")
-            W("|---|---|---|")
-            for m, g in x.groupby("model"):
-                sub = oo[(oo.model == m) & ((oo.model != OURS) | (oo.ablation == HEAD))]
-                pub = (f"{sub.fidelity_gain_perm_rel.mean():.3f} ({len(sub)})"
-                       if len(sub) else "— (absent)")
-                nm = f"**{LABEL}**" if m == OURS else m
-                W(f"| {nm} | {pub} | {ms(g.fidelity_gain_perm_rel)} |")
-            W("")
+            W(f"| {m} | {dm:+.3f} | {p:.3g} | {pa:.3g}{star} | {n} |")
+        if res:
+            W(f"\nOur model's SHAP ranking is more faithful than "
+              f"{sum(r[1] > 0 for r in res)} of {len(res)} baselines on average; "
+              f"**{sum(r[3] < 0.05 for r in res)} of {len(res)}** differences "
+              f"survive Holm.\n")
 
         body = ["\\begin{tabular}{lccc}", "\\toprule",
-                "Model & SHAP-ranked & Permutation-ranked & "
-                "$\\rho$(SHAP, perm) \\\\", "\\midrule"]
-        for _, m, g in sorted(rows, key=lambda r: -r[0]):
-            nm = f"\\textbf{{{LABEL}}}" if m == OURS else m
-            t = lambda v: (f"{v.mean():.3f} $\\pm$ {v.std(ddof=1):.3f}"
-                           if v.notna().sum() > 1 else "--")
-            body.append(f"{nm} & {t(g.fidelity_gain_shap_rel)} & "
-                        f"{t(g.fidelity_gain_perm_rel)} & "
-                        f"{t(g.agree_shap_perm_rho)} \\\\")
-        if len(o) and o.fidelity_gain_attn_rel.notna().any():
-            v = o.fidelity_gain_attn_rel
-            body.append("\\midrule")
-            body.append(f"\\textbf{{{LABEL}}} (built-in attention) & "
-                        f"\\multicolumn{{3}}{{c}}{{{v.mean():.3f} $\\pm$ "
-                        f"{v.std(ddof=1):.3f}}} \\\\")
+                "Model & SHAP-ranked & Occlusion-ranked & $\\rho$(SHAP, occl.) \\\\",
+                "\\midrule"]
+        for _, m, g in rows:
+            n_ = f"\\textbf{{{LABEL}}}" if m == OURS else m
+            body.append(f"{n_} & {tex(g.det_gain_shap_rel)} & "
+                        f"{tex(g.det_gain_occl_rel)} & {tex(g.det_agree_shap_occl_rho)} \\\\")
+        if len(o) and o.det_gain_attn_rel.notna().any():
+            body += ["\\midrule",
+                     f"\\textbf{{{LABEL}}} (built-in attention) & "
+                     f"\\multicolumn{{3}}{{c}}{{{tex(o.det_gain_attn_rel)}}} \\\\"]
         body += ["\\bottomrule", "\\end{tabular}"]
-        with open(os.path.join(ROOT, "paper", "tables", f"fidelity_{ds}.tex"), "w") as f:
-            f.write("\\begin{table}[H]\n\\caption{Explanation fidelity on "
-                    f"{ds}, physical channels only, mean $\\pm$ s.d. over 5 "
-                    "seeds for every model. All models are explained under "
-                    "identical conditions (same 2560 test windows, same "
-                    "attribution budget, same perturbation grid). Higher = "
-                    "the ranking identifies channels the model depends on.}\n"
-                    f"\\label{{tab:fid_{ds}}}\n" + "\n".join(body) +
-                    "\n\\end{table}\n")
+        write_tex(os.path.join(ROOT, "paper", "tables", f"fidelity_{ds}.tex"),
+                  "\n".join(body),
+                  f"Explanation fidelity on {ds}, physical channels only, mean "
+                  "$\\pm$ s.d. over 5 seeds for every model. Deterministic "
+                  "metric: a perturbed channel is replaced by its own window "
+                  "mean and the reference ordering set is fixed and shared, so "
+                  "the spread is model variance only. Baselines in the "
+                  "normalization variant selected on validation. SHAP-ranked = "
+                  "fidelity of the model's GradientSHAP ranking; "
+                  "occlusion-ranked ranks by the scoring perturbation itself "
+                  "and serves as an upper reference.", f"tab:fid_{ds}")
 
-    # ---------------- P0-4: entropy regulariser, correct control --------- #
-    W("\n---\n\n## P0-4: does the entropy regulariser buy faithfulness? (Jena)\n")
-    W("**Control.** `no_entropy` is defined relative to `full` "
-      "(`ABLATIONS[\"no_entropy\"] = {}` in [src/train.py](src/train.py)), so "
-      "it has **RevIN on**. The headline model is `no_revin`. Comparing "
-      "`no_entropy` with the headline would change two things at once — the "
-      "regulariser *and* RevIN. The only clean comparison is **`full` vs "
-      "`no_entropy`**, which differ in `lambda_ent` alone (0.01 vs 0). The "
-      "headline is shown for context only.\n")
-    W("> Correction. An earlier version of this analysis compared `no_entropy` "
-      "with `no_revin` and concluded that the regulariser roughly doubles the "
-      "attention–occlusion agreement. That comparison was confounded by RevIN "
-      "and is withdrawn; the numbers below replace it.\n")
-    fu = d[(d.model == OURS) & (d.ablation == "full") & (d.dataset == "jena")]
-    ne = d[(d.model == OURS) & (d.ablation == "no_entropy") & (d.dataset == "jena")]
-    hd = d[(d.model == OURS) & (d.ablation == HEAD) & (d.dataset == "jena")]
-    if ne.empty or fu.empty:
-        W("_full or no_entropy XAI runs not available yet._\n")
-    else:
-        s_ = sorted(set(ne.seed) & set(fu.seed))
-        W(f"`no_entropy` has **{ne.seed.nunique()} seeds**; the clean "
-          f"comparison uses the matched seeds {s_}. Seeds 3–4 and all of "
-          "Beijing are queued in the GPU track, so this is **provisional**.\n")
-        W("| Metric | full (λ=0.01) | no_entropy (λ=0) | Δ full − no_entropy | "
-          "headline no_revin (context) |")
-        W("|---|---|---|---|---|")
-        for col, lab in (("fidelity_gain_attn_rel", "fidelity, attention-ranked"),
-                         ("agree_attn_shap_rho", "Spearman(attention, SHAP)"),
-                         ("agree_attn_perm_rho", "Spearman(attention, perm)"),
-                         ("fidelity_gain_shap_rel", "fidelity, SHAP-ranked"),
-                         ("fidelity_gain_perm_rel", "fidelity, permutation-ranked")):
-            if col not in d:
-                continue
-            a = fu.set_index("seed")[col].reindex(s_)
-            b = ne.set_index("seed")[col].reindex(s_)
-            W(f"| {lab} | {ms(a)} | {ms(b)} | {(a - b).mean():+.3f} | "
-              f"{ms(hd[col])} |")
-        W("")
-        oc = os.path.join(ROOT, "analysis", "occlusion_time.csv")
-        if os.path.exists(oc):
-            oc = pd.read_csv(oc)
-            oc = oc[oc.dataset == "jena"]
-            W("Occlusion along time, same code for all three:\n")
-            W("| Variant | n | ρ(attention) | ρ(rollout) | ρ(recency control) |")
-            W("|---|---|---|---|---|")
-            for abl in ("full", "no_entropy", HEAD):
-                g = oc[oc.ablation == abl]
-                if g.empty:
-                    W(f"| {abl} | 0 | _pending_ | | |")
-                    continue
-                W(f"| {abl} | {len(g)} | {ms(g.rho_temp_attn)} | "
-                  f"{ms(g.rho_rollout)} | {ms(g.rho_recency)} |")
-            W("")
-        W("**Reading, with the noise caveat above in mind.** With n = 3 and an "
-          "estimator sd of ~0.18 per run, only a difference well above ~0.3 "
-          "could be taken seriously. Treat this table as a direction, not a "
-          "result, until the remaining seeds arrive.\n")
-    # --------- the effect that IS there: RevIN on vs off, 5 vs 5 --------- #
-    if not fu.empty and not hd.empty:
-        W("### What does move faithfulness: RevIN, not the regulariser\n")
-        W("`full` (RevIN on) and the headline `no_revin` (RevIN off) both have "
-          "5 seeds and differ only in RevIN. Paired by seed — identical "
-          "explained windows and, within a pair, the same permutation stream, "
-          "so much of the estimator noise cancels in the difference (common "
-          "random numbers). That is why these paired tests resolve effects "
-          "smaller than the ~0.18 unpaired sd would suggest.\n")
-        W("| Metric | RevIN on (full) | RevIN off (headline) | Δ | paired t p "
-          "| on > off |")
+    # ------------------------------------------------------------ P0-4
+    W("\n---\n\n## P0-4: does the entropy regulariser buy faithfulness?\n")
+    W("Isolated by two variants that differ in `lambda_ent` alone, on the "
+      "published configuration: `no_revin` (λ=0.01, the headline) vs "
+      "`no_revin+no_entropy` (λ=0), both RevIN off, 5 seeds, both datasets, "
+      "paired by seed. Deterministic metric; the time-axis rows come from "
+      "[occlusion_time.md](analysis/occlusion_time.md), which was deterministic "
+      "from the start.\n")
+    W("> Correction. An earlier version compared `no_entropy` (RevIN on) with "
+      "`no_revin` (RevIN off) and concluded that the regulariser doubles the "
+      "attention–occlusion agreement. That comparison changed RevIN too and is "
+      "withdrawn.\n")
+    cols = (("det_gain_attn_rel", "fidelity, attention-ranked"),
+            ("det_agree_attn_shap_rho", "Spearman(attention, SHAP)"),
+            ("det_agree_attn_occl_rho", "Spearman(attention, occlusion)"),
+            ("det_gain_shap_rel", "fidelity, SHAP-ranked"),
+            ("det_gain_occl_rel", "fidelity, occlusion-ranked"))
+    oc_path = os.path.join(ROOT, "analysis", "occlusion_time.csv")
+    oc_all = pd.read_csv(oc_path) if os.path.exists(oc_path) else pd.DataFrame()
+    p04 = []
+    for ds, title in DATASETS:
+        if det.empty:
+            break
+        on = det[(det.model == OURS) & (det.ablation == HEAD) & (det.dataset == ds)]
+        off = det[(det.model == OURS) & (det.ablation == "no_revin+no_entropy")
+                  & (det.dataset == ds)]
+        W(f"### {title}\n")
+        if on.empty or off.empty:
+            W("_not computed yet_\n")
+            continue
+        sd = sorted(set(on.seed) & set(off.seed))
+        W(f"| Metric (n = {len(sd)}) | λ=0.01 (headline) | λ=0 | Δ | paired t p | λ>0 better |")
         W("|---|---|---|---|---|---|")
+        for col, lab in cols:
+            a = on.set_index("seed")[col].reindex(sd)
+            b = off.set_index("seed")[col].reindex(sd)
+            pv = stats.ttest_rel(a, b).pvalue if len(sd) > 1 else np.nan
+            p04.append((title, lab, pv, int((a > b).sum()), len(sd),
+                        "attention" in lab))
+            W(f"| {lab} | {ms(a)} | {ms(b)} | {(a - b).mean():+.3f} | {pv:.3f} | "
+              f"{int((a > b).sum())}/{len(sd)} |")
+        if len(oc_all):
+            oc = oc_all[oc_all.dataset == ds]
+            a = oc[oc.ablation == HEAD].set_index("seed").rho_temp_attn
+            b = oc[oc.ablation == "no_revin+no_entropy"].set_index("seed").rho_temp_attn
+            so = sorted(set(a.index) & set(b.index))
+            if len(so) > 1:
+                pv = stats.ttest_rel(a.reindex(so), b.reindex(so)).pvalue
+                p04.append((title, "time occlusion ρ(attention)", pv,
+                            int((a.reindex(so) > b.reindex(so)).sum()), len(so), True))
+                rc = oc[oc.ablation == HEAD].set_index("seed").rho_recency.reindex(so)
+                W(f"| time occlusion ρ(attention) | {ms(a.reindex(so))} | "
+                  f"{ms(b.reindex(so))} | {(a.reindex(so) - b.reindex(so)).mean():+.3f} "
+                  f"| {pv:.3f} | {int((a.reindex(so) > b.reindex(so)).sum())}/{len(so)} |")
+                W(f"\nRecency control on the same windows: ρ = {ms(rc)}.\n")
+    if p04:
+        ps = np.array([r[2] for r in p04], float)
+        adj = holm(ps)
+        best = int(np.nanargmin(ps))
+        att = [r for r in p04 if r[5]]
+        fav, tot = sum(r[3] for r in att), sum(r[4] for r in att)
+        W(f"**Multiple comparisons.** {len(p04)} paired tests. Smallest raw p = "
+          f"{ps[best]:.3f} ({p04[best][0]}, {p04[best][1]}), Holm-adjusted "
+          f"{adj[best]:.2f}. {'No difference' if (adj >= 0.05).all() else 'At least one difference'} "
+          "survives the correction.\n")
+        W(f"**Reading.** On the attention rows λ=0.01 comes out ahead in **{fav} "
+          f"of {tot}** seed-level comparisons. A regulariser that made attention "
+          "more faithful would win most of them. The SHAP- and occlusion-ranked "
+          "rows describe the model rather than its attention and should barely "
+          "move.\n")
+        W("**Conclusion for Major #7.** "
+          + ("The entropy regulariser does not improve faithfulness; no "
+             "difference survives correction and the direction on the attention "
+             "rows is against it. " if (adj >= 0.05).all() and fav < tot / 2 else
+             "See the table: read any surviving difference against its "
+             "direction across seeds. ")
+          + "The claim that it \"lifts the fidelity/stability numbers\" (also in "
+          "the docstring of [src/xm_models/xai_meteoformer.py](src/xm_models/xai_meteoformer.py)) "
+          "is not supported. What it demonstrably does is sparsify the attention "
+          "([results_hygiene.md](analysis/results_hygiene.md)); if kept, describe "
+          "it as a sparsity prior only.\n")
+
+    # ------------------------------------------------------------ RevIN
+    W("\n---\n\n## What does move faithfulness: RevIN\n")
+    W("`full` (RevIN on) vs the headline `no_revin` (RevIN off), 5 seeds each, "
+      "paired by seed, deterministic metric.\n")
+    for ds, title in DATASETS:
+        if det.empty:
+            break
+        fu = det[(det.model == OURS) & (det.ablation == "full") & (det.dataset == ds)]
+        hd = det[(det.model == OURS) & (det.ablation == HEAD) & (det.dataset == ds)]
         s5 = sorted(set(fu.seed) & set(hd.seed))
-        for col, lab in (("fidelity_gain_attn_rel", "fidelity, attention-ranked"),
-                         ("agree_attn_shap_rho", "Spearman(attention, SHAP)"),
-                         ("fidelity_gain_shap_rel", "fidelity, SHAP-ranked"),
-                         ("fidelity_gain_perm_rel", "fidelity, permutation-ranked")):
+        if len(s5) < 2:
+            W(f"### {title}\n\n_not computed yet_\n")
+            continue
+        W(f"### {title}\n")
+        W("| Metric | RevIN on (full) | RevIN off (headline) | Δ | paired t p | on > off |")
+        W("|---|---|---|---|---|---|")
+        for col, lab in cols:
             a = fu.set_index("seed")[col].reindex(s5)
             b = hd.set_index("seed")[col].reindex(s5)
-            pv = stats.ttest_rel(a, b).pvalue
             W(f"| {lab} | {ms(a)} | {ms(b)} | {(a - b).mean():+.3f} | "
-              f"{pv:.3f} | {int((a > b).sum())}/{len(s5)} |")
+              f"{stats.ttest_rel(a, b).pvalue:.3f} | {int((a > b).sum())}/{len(s5)} |")
         W("")
-        W("**The configuration selected for accuracy is the one with the least "
-          "faithful variable attention.** Switching RevIN off — which the "
-          "validation loss chose, and which gives the paper its first place by "
-          "MAE — takes attention-ranked fidelity from 0.34 to 0.04 (p = 0.004, "
-          "5 of 5 seeds) and the attention–SHAP agreement from 0.84 to 0.48 "
-          "(5 of 5 seeds). This is an accuracy–faithfulness trade-off, and it "
-          "is the most defensible XAI finding in this analysis: it is paired, "
-          "on equal budgets, and consistent across every seed.\n")
-        W("On the time axis the picture is different and weaker: neither "
-          "configuration's temporal attention beats the recency control in "
-          "[occlusion_time.md](analysis/occlusion_time.md), so there is no "
-          "faithfulness on that axis to trade.\n")
 
-    W("### Verdict for P0-3 and P0-4\n")
-    W("1. The 5-seed-vs-1-seed comparison is gone: every model now has 5 "
-      "seeds under identical conditions, and SHAP exists for all 11.")
-    W("2. Our model is **not** the most faithful by SHAP or permutation "
-      "fidelity: Crossformer is level (Δ −0.02, p = 0.27). It beats 9 of 10 "
-      "baselines on average, but only TimesNet and Autoformer survive Holm on "
-      "Jena. The published claim of a clear lead rested on a frozen RNG stream.")
-    W("3. The built-in attention of the headline model is not faithful "
-      "(0.04, indistinguishable from zero).")
-    W("4. The entropy regulariser has **no detectable effect** on faithfulness "
-      "on either axis in the clean `full` vs `no_entropy` comparison. Its "
-      "claimed benefit should be dropped or reworded as sparsity only.")
-    W("5. What does matter is RevIN: turning it off bought accuracy and cost "
-      "attention faithfulness. That trade-off is the honest XAI story for the "
-      "resubmission.\n")
+    # ------------------------------------------------------------ appendix
+    W("\n---\n\n## Appendix: the permutation metric of `src/xai.py`\n")
+    W("Same models, variants, windows and SHAP budget; perturbation by random "
+      "time permutation and a single random reference ordering. **Caveat: on one "
+      "fixed checkpoint this metric has sd ≈ 0.18 from its own Monte-Carlo noise "
+      "at the current budget** — as large as the between-seed spread — so "
+      "differences below ~0.2 are not interpretable. Kept for continuity with the "
+      "published table, whose sd of 0.037 came from reusing one RNG stream across "
+      "checkpoints.\n")
+    nz_path = os.path.join(ROOT, "analysis", "fidelity_estimator_noise.csv")
+    if os.path.exists(nz_path):
+        nz = pd.read_csv(nz_path)
+        W("| One fixed checkpoint, RNG seed 0–4 | SHAP-ranked | permutation-ranked |")
+        W("|---|---|---|")
+        for m, g in nz.groupby("model"):
+            W(f"| {nm(m)} | {ms(g.fidelity_gain_shap_rel)} | {ms(g.fidelity_gain_perm_rel)} |")
+        W("")
+    perm = load_perm()
+    for ds, title in DATASETS:
+        x = perm[perm.dataset == ds]
+        keep = x.apply(lambda r: (r.ablation == HEAD) if r.model == OURS
+                       else r.suffix == selected_suffix(r.model, ds), axis=1)
+        x = x[keep]
+        if x.empty:
+            continue
+        W(f"### {title}, permutation metric\n")
+        W("| Model | n | SHAP-ranked | permutation-ranked | ρ(SHAP, perm) |")
+        W("|---|---|---|---|---|")
+        rows = sorted(((g.fidelity_gain_shap_rel.mean(), m, g)
+                       for m, g in x.groupby("model")), key=lambda r: -r[0])
+        for _, m, g in rows:
+            W(f"| {nm(m)} | {g.seed.nunique()} | {ms(g.fidelity_gain_shap_rel)} | "
+              f"{ms(g.fidelity_gain_perm_rel)} | {ms(g.agree_shap_perm_rho)} |")
+        W("")
+        body = ["\\begin{tabular}{lccc}", "\\toprule",
+                "Model & SHAP-ranked & Permutation-ranked & $\\rho$(SHAP, perm.) \\\\",
+                "\\midrule"]
+        for _, m, g in rows:
+            n_ = f"\\textbf{{{LABEL}}}" if m == OURS else m
+            body.append(f"{n_} & {tex(g.fidelity_gain_shap_rel)} & "
+                        f"{tex(g.fidelity_gain_perm_rel)} & {tex(g.agree_shap_perm_rho)} \\\\")
+        body += ["\\bottomrule", "\\end{tabular}"]
+        write_tex(os.path.join(ROOT, "paper", "tables",
+                               f"fidelity_perm_appendix_{ds}.tex"), "\n".join(body),
+                  f"Appendix. Explanation fidelity on {ds} with the permutation "
+                  "metric (random time permutation, single random reference "
+                  "ordering), 5 seeds. On one fixed checkpoint this estimator "
+                  "has s.d. $\\approx$ 0.18 from its own sampling noise at this "
+                  "budget, so differences below $\\approx$ 0.2 are not "
+                  "interpretable; the deterministic metric in the main text "
+                  "removes this noise.", f"tab:fid_perm_{ds}")
 
-    W("### Structural issue with the ablation table\n")
-    W("Every ablation in [src/train.py](src/train.py) is defined relative to "
-      "`full`, which has RevIN **on**. The headline model is `no_revin`. So "
-      "each ablation row measures what a component contributes to a model the "
-      "paper does not report. The clean fix is to re-base the ablations on the "
-      "headline configuration (`use_revin=False` plus the component removed). "
-      "That is a GPU-track change and would replace P1-2 as currently "
-      "specified; it is flagged here, not done.\n")
-    W("And, as recorded in [results_hygiene.md](analysis/results_hygiene.md), "
-      "`no_var_attn` disables the entropy term too — with `use_var_attn=False` "
-      "the attention is a constant and `var_entropy` has no gradient path — so "
-      "that row removes two things at once.\n")
+    # ------------------------------------------------------------ verdict
+    W("\n---\n\n## Verdict for P0-3 and P0-4\n")
+    if not det.empty:
+        perm_all = load_perm()
+        for ds, title in DATASETS:
+            x = selected(det, ds)
+            if x.empty:
+                continue
+            rank = x.groupby("model").det_gain_shap_rel.mean().sort_values(ascending=False)
+            pos = list(rank.index).index(OURS) + 1
+            res = paired_vs_ours(x, "det_gain_shap_rel")
+            worse = [(m, dm, pa) for m, dm, p, pa, n in res if dm < 0]
+            worse_sig = [m for m, dm, pa in worse if pa < 0.05]
+            cf = [r for r in res if r[0] == "Crossformer"]
+            o = x[x.model == OURS]
+            po = perm_all[(perm_all.dataset == ds) & (perm_all.model == OURS)
+                          & (perm_all.ablation == HEAD)]
+            sd_p = float(po.fidelity_gain_shap_rel.std(ddof=1)) if len(po) > 1 else np.nan
+            sd_d = float(o.det_gain_shap_rel.std(ddof=1))
+            W(f"**{title}.** Our model ranks **{pos} of {len(rank)}** by "
+              f"SHAP-ranked fidelity ({ms(o.det_gain_shap_rel)}). "
+              + (f"Against Crossformer: Δ = {cf[0][1]:+.3f}, Holm p = {cf[0][3]:.3g}"
+                 + (" — **Crossformer is significantly more faithful**. "
+                    if cf[0][3] < 0.05 else " — not significant. ") if cf else "")
+              + (f"Significantly more faithful than ours: "
+                 f"{', '.join(worse_sig)}. " if worse_sig
+                 else "No baseline is significantly more faithful. ")
+              + f"Built-in attention: {ms(o.det_gain_attn_rel)} — "
+                "indistinguishable from zero, and now with a tight interval "
+                "rather than the wide one the permutation metric produced. "
+              + (f"Removing the estimator noise shrank the seed sd of our own "
+                 f"score from {sd_p:.3f} to {sd_d:.3f}.\n"
+                 if sd_p == sd_p else "\n"))
+        W("**What this changes.** Under the noisy permutation metric our model "
+          "looked second, just behind Crossformer, with seed sds of ~0.19 that "
+          "made every ranking meaningless. With the noise removed the ordering "
+          "is resolved and it is less flattering: our model sits mid-table on "
+          "both datasets. The honest claim is no longer \"most faithful\" but "
+          "\"comparable to the strongest baselines by SHAP-ranked fidelity, "
+          "ahead of the weaker half, and behind Crossformer\".\n")
+        W("**The built-in attention remains the weak point** and is now firmly "
+          "so: its fidelity is ~0 with a small interval, and it is far below "
+          "the same model's SHAP ranking. The defensible framing is that the "
+          "model is explainable by post-hoc attribution, not that its attention "
+          "is an explanation.\n")
+        W("**Two findings are unchanged by the metric swap**, which is the best "
+          "evidence that they are real: the entropy regulariser does not buy "
+          "faithfulness (P0-4 above), and RevIN does — the configuration "
+          "selected for accuracy, `no_revin`, has markedly less faithful "
+          "attention than `full` (Jena: attention-ranked fidelity 0.181 vs "
+          "0.012, paired p = 0.001, 5 of 5 seeds).\n")
 
     dst = os.path.join(ROOT, "analysis", "xai_fidelity_v2.md")
     open(dst, "w").write("\n".join(L))
