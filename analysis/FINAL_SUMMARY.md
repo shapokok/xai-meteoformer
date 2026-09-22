@@ -117,7 +117,7 @@ Headline configuration: `XAI-MeteoFormer`, ablation `no_revin`, seq_len 96,
 > *"Because the targets have different units and scales, aggregate MAE and RMSE values can obscure important differences between variables. Per-target and per-horizon results should be reported … The frost-classification experiment likewise requires clarification regarding how regression baselines were adapted for classification, whether identical auxiliary heads and training procedures were used, how class imbalance was handled and how F1 thresholds were selected."*
 - **Files:** `analysis/per_target_horizon.md`, `paper/tables/per_target_*.tex`, `per_horizon_*.tex`, `analysis/frost_events.md`, `paper/tables/events_*.tex`.
 - **Numbers:** first place is **not** uniform across targets. Jena — 1st on temperature (MAE and RMSE), 2nd on RH, P and WS behind Crossformer. Beijing — 1st on T, 4th on RH, 2nd on P and WS. By horizon — 1st at 6/12/24 h on both datasets, 2nd–3rd at 1 h behind DLinear.
-- **Frost protocol:** every baseline is scored from its predicted temperature (`-T_pred` as the ranking score, `T_pred <= tau` as the decision); our dedicated head is evaluated separately in the ablation, so two different amounts of supervision are never compared. The threshold is selected on validation. The conclusion's "best F1 and AUC" claim must be corrected: ours is 4th by AUC on Jena and 2nd on Beijing.
+- **Frost protocol:** every baseline is scored from its predicted temperature (`-T_pred` as the ranking score, `T_pred <= tau` as the decision); our dedicated head is evaluated separately in the ablation, so two different amounts of supervision are never compared. The threshold is selected on validation. The conclusion's "best F1 and AUC" claim must be corrected: by F1 ours is 5th on Jena (0.701 against Crossformer 0.717) and 2nd on Beijing (0.793 against TimesNet 0.802); by AUC 4th on Jena and 2nd on Beijing. Crossformer, in the variant now selected on Beijing, drops to 5th by F1 there.
 
 ### Reporting and consistency paragraph (unnumbered)
 | Item | Status |
@@ -135,31 +135,34 @@ Headline configuration: `XAI-MeteoFormer`, ablation `no_revin`, seq_len 96,
 ## What this round adds beyond the reviews
 
 - **Crossformer at full width** (`analysis/crossformer_fullwidth.md`): 128×128 (1.70 M params) 3.107 ± 0.018, 256×512 (7.98 M) 3.184 ± 0.073, 256×1024 (10.61 M) 3.175 ± 0.042, ours (1.89 M) **3.025 ± 0.031**. Width does not help Crossformer, so the reduced-width criticism is answered with data instead of an apology.
-- **Baseline normalization symmetry** (`analysis/norm_selection.md`): each baseline now runs in the variant with the lower mean validation loss — the rule that selected `no_revin` for our model. Four switch (Autoformer on both datasets, Transformer on Beijing, LSTM on Jena); all four get stronger and our model stays first by MAE. `main_historical_*.tex` keeps the old configuration for the appendix.
+- **Baseline normalization symmetry** (`analysis/norm_selection.md`): each baseline now runs in the variant with the lower mean validation loss — the rule that selected `no_revin` for our model. Five switch (Autoformer on both datasets, Transformer on Beijing, LSTM on Jena, Crossformer on Beijing); all five get stronger, and on Beijing Crossformer overtakes us by MAE into a statistical tie. `main_historical_*.tex` keeps the old configuration for the appendix.
 - **Training-recipe variants, each swept over all 11 models** (`analysis/aug_robustness.md`, `analysis/loss_mse.md`). Neither replaces the headline: both are worse on clean validation loss, and choosing one because it wins on test would be selection on test.
   - Station-outage augmentation: Jena 6th → **1st** under the outage with clean MAE unchanged (3.028 → 3.023); Beijing degradation +60 % → +48 % but the rank stays 8th and clean MAE goes 4.151 → 4.255. Both datasets reported.
   - MSE instead of Huber: a negative result. The RMSE gap does not close (ours 5.267 → 5.214 while Crossformer goes 5.166 → 5.150) and Beijing MAE loses first place (4.151 → 4.224 against Crossformer 4.247 → 4.110). The humidity dispersion moves only 0.951 → 0.927 against an optimum near 0.86, where Crossformer already sits at 0.850.
 
-- **Zero-shot transfer across the 11 remaining PRSA stations** (`analysis/cross_station.md`): our model transfers best — 4.114 ± 0.068 MAE against 4.183 (iTransformer) and 4.211 (Crossformer), first at 9 of 11 stations, and every model's error *drops* slightly off-domain, so the ranking is not an artefact of one station. The per-channel budget replicates too: our deficit against Crossformer is the humidity channel alone, in domain (RH +21.8 MSE) and on the unseen stations (+24.1), while temperature stays in our favour (−7.8 / −8.2) — see the replication section of `analysis/error_decomposition.md`. So the MAE lead and the RMSE deficit both transfer, and the deficit has a single, named cause.
-
-- **Dispersion calibration, fitted on validation** (`analysis/variance_calibration.md`, `paper/tables/variance_calibration_appendix.tex`). The oracle rescaling in `error_decomposition.md` was fitted on test and could only measure; this one fits the coefficient per (model, dataset, seed, channel) **on validation**, freezes it, and scores test once — for all 11 models.
-  - **The coefficient is reachable without the test set**: validation finds 0.868 ± 0.032 on Jena against the test oracle's 0.861, and 0.845 ± 0.019 on Beijing against 0.819.
-  - So the loss route and the calibration route do **not** hit the same wall: training with MSE moved the dispersion only 0.951 → 0.927, while one validation-fitted number reaches the optimum. The over-dispersion is not a property of the Huber criterion.
-  - **With every model calibrated, our squared-loss deficit to Crossformer stops being significant**: Jena ΔL2 +1.051 (p = 1.6e-07) → +0.093 (p = 0.61); Beijing +3.444 (p = 3.7e-04) → +2.020 (p = 0.076). Say "no longer significant", not "closed": on Jena the deficit is essentially gone, on Beijing it shrinks by 40 % and its p-value sits at the border. The MAE lead survives and strengthens (Jena ΔL1 −0.082 → −0.085, Beijing −0.096 → −0.162, both significant).
-  - **Why this is not a rescue by fitting:** the coefficient comes from validation and never from test; all 11 models get it, not ours alone; and the mechanism was predicted in `error_decomposition.md` *before* any calibration existed, then confirmed twice independently — the MSE run moved the dispersion in the predicted direction but too little, and validation recovered the oracle's coefficient on its own.
-  - This is an appendix analysis of the mechanism. The headline, the main table and every other number stay uncalibrated.
+- **Zero-shot transfer across the 11 remaining PRSA stations** (`analysis/cross_station.md`): with every baseline in its selected variant, **Crossformer transfers best** — 4.093 ± 0.089 against our 4.114 ± 0.068, first at 8 of the 11 stations against our 3. Every model's error drops slightly off-domain, so the ranking is not an artefact of one station, and the in-domain order is preserved (Kendall τ 0.78–1.00). The per-channel budget replicates too: our deficit against Crossformer is the humidity channel alone, in domain (RH +21.8 MSE) and in transfer (+24.1), while temperature stays in our favour (−7.8 / −8.2) — see the replication section of `analysis/error_decomposition.md`.
 
 ## Headline numbers for the paper
 
 | | Jena | Beijing |
 |---|---|---|
-| MeteoFormer MAE | **3.025 ± 0.031** | **4.151 ± 0.039** |
-| best baseline MAE | Crossformer 3.107 ± 0.018 | Crossformer 4.247 ± 0.095 |
+| MeteoFormer MAE | **3.025 ± 0.031** | 4.151 ± 0.039 |
+| best baseline MAE | Crossformer 3.107 ± 0.018 | Crossformer **4.138 ± 0.023** |
 | MeteoFormer RMSE | 5.267 ± 0.046 | 8.216 ± 0.049 |
-| best baseline RMSE | Crossformer **5.166 ± 0.021** | Crossformer **8.002 ± 0.172** |
+| best baseline RMSE | Crossformer **5.166 ± 0.021** | Crossformer **7.916 ± 0.080** |
 | MeteoFormer R² | **0.682 ± 0.005** | **0.659 ± 0.002** |
-| DM, absolute loss | significantly better than all 10 | significantly better than all 10 |
-| DM, squared loss | Crossformer significantly better | Crossformer significantly better |
+| DM, absolute loss | better than all 10, significant | better than 9 of 10, significant; **tied with Crossformer** (Δ +0.013, p = 0.72) |
+| DM, squared loss | Crossformer significantly better | Crossformer significantly better (Δ +4.84, p = 0.0016) |
+
+**What changed in the final run.** Crossformer was the one baseline P1-1 had
+never given the symmetric RevIN treatment. It now has it, and on Beijing the
+validation rule selects it: val loss 0.1704 with RevIN against 0.1721 without.
+That makes Crossformer stronger there, and **our first place by MAE on Beijing
+becomes a statistical tie** (4.151 vs 4.138, DM p = 0.72). On Jena the rule
+keeps the historical variant (0.1489 without against 0.1511 with) and nothing
+moves. The claim the paper can defend is: first by MAE on Jena, significant
+against all ten; on Beijing first by R², tied with Crossformer by MAE, behind
+it on RMSE.
 
 ## Manuscript-only edits — for the response letter and the yellow mark-up
 
@@ -205,8 +208,11 @@ then the edit. Order follows the reviews.
 
 ## Still open
 
-1. **Manuscript edits**: R1 Major #2, R1 Minor #1, #2, #3, #4, #5, #9, and the whole R2 reporting paragraph. None need computation; all need the text rewritten against the numbers above.
-2. **If a recipe variant is ever promoted to the headline**, fidelity must be recomputed for it: 10 deterministic + 10 permutation runs, about 1 h locally.
+1. **The Beijing headline claim has to be rewritten.** "Outperforms all
+   baselines on both datasets" is no longer true: on Beijing it is a tie with
+   Crossformer by MAE and a loss by RMSE. Jena is unaffected.
+2. **Manuscript edits**: R1 Major #2, R1 Minor #1, #2, #3, #4, #5, #9, and the whole R2 reporting paragraph. None need computation; all need the text rewritten against the numbers above.
+3. **If a recipe variant is ever promoted to the headline**, fidelity must be recomputed for it: 10 deterministic + 10 permutation runs, about 1 h locally.
 
 ## The two decisive objections, and where we stand
 
@@ -215,13 +221,15 @@ not the answer the paper originally wanted:
 
 1. *"Not competitive on accuracy — Crossformer beats it on every primary metric
    on Jena."* The comparison he saw was against our `full` configuration
-   (MAE 3.195). The headline `no_revin` model is **3.025 vs 3.107**, first by MAE
-   on both datasets and significant against all ten baselines. Crossformer keeps
-   RMSE, at every width, and that is now stated instead of glossed — with one
-   qualification the appendix supplies: once every model is given a dispersion
-   calibration fitted on validation, that RMSE gap is no longer significant on
-   either dataset — gone on Jena, borderline on Beijing (p = 0.076)
-   (`analysis/variance_calibration.md`).
+   (MAE 3.195). The headline `no_revin` model is **3.025 vs 3.107 on Jena**,
+   first by MAE and significant against all ten baselines. On **Beijing** the
+   answer is weaker after the final run: once Crossformer receives the same
+   validation-selected RevIN every other baseline got, it reaches 4.138 against
+   our 4.151 — a statistical tie by MAE (DM p = 0.72), our first place by R²,
+   and Crossformer ahead on RMSE at every width. The appendix shows that the
+   squared-loss gap is the humidity channel's scale: a calibration fitted on
+   validation removes it on Jena and halves it on Beijing, where it stays
+   significant (`analysis/variance_calibration.md`).
 2. *"Built-in attention is not a useful explanation."* Confirmed, and the final
    numbers are worse than the ones he saw: on the deterministic metric the
    attention's fidelity is 0.012 (Jena) and 0.046 (Beijing), and even our SHAP

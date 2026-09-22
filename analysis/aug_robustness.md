@@ -54,7 +54,7 @@ The outage test is the one in [analysis/block_missing.md](analysis/block_missing
 | Recipe | validation loss | clean MAE | outage MAE | degradation | rank under outage |
 |---|---|---|---|---|---|
 | published (Huber, no augmentation) | 0.1592 | 4.150 | 6.637 | +60% | 8 / 11 |
-| with outage augmentation | 0.1605 | 4.255 | 6.307 | +48% | 8 / 11 |
+| with outage augmentation | 0.1605 | 4.255 | 6.307 | +48% | 7 / 10 |
 
 ### Every model under the outage (MAE, variant A: last 16 h lost)
 
@@ -62,31 +62,31 @@ The outage test is the one in [analysis/block_missing.md](analysis/block_missing
 |---|---|---|---|---|---|
 | TimesNet | 6.110 | 6.008 | -0.102 | 2 | 1 |
 | Autoformer | 6.007 | 6.094 | +0.087 | 1 | 2 |
-| Transformer | 6.196 | 6.121 | -0.075 | 3 | 3 |
-| iTransformer | 6.249 | 6.128 | -0.121 | 4 | 4 |
+| Transformer | 6.196 | 6.121 | -0.075 | 4 | 3 |
+| iTransformer | 6.249 | 6.128 | -0.121 | 5 | 4 |
 | LSTM | 6.893 | 6.128 | -0.765 | 9 | 5 |
 | PatchTST | 6.394 | 6.238 | -0.156 | 6 | 6 |
-| Crossformer | 6.338 | 6.274 | -0.065 | 5 | 7 |
-| **MeteoFormer** | 6.637 | 6.307 | -0.330 | 8 | 8 |
-| DLinear | 6.587 | 6.576 | -0.011 | 7 | 9 |
-| Informer | 7.033 | 6.783 | -0.251 | 10 | 10 |
-| TFT | 8.070 | 7.585 | -0.485 | 11 | 11 |
+| **MeteoFormer** | 6.637 | 6.307 | -0.330 | 8 | 7 |
+| DLinear | 6.587 | 6.576 | -0.011 | 7 | 8 |
+| Informer | 7.033 | 6.783 | -0.251 | 10 | 9 |
+| TFT | 8.070 | 7.585 | -0.485 | 11 | 10 |
+| Crossformer | 6.152 | _missing_ | | 3 | |
 
 ### Accuracy on clean data, every model
 
 | Model | MAE published | MAE variant | Δ | rank published | rank variant |
 |---|---|---|---|---|---|
-| **MeteoFormer** | 4.151 | 4.255 | +0.104 | 1 | 1 |
-| Crossformer | 4.247 | 4.268 | +0.021 | 2 | 2 |
-| iTransformer | 4.251 | 4.275 | +0.024 | 3 | 3 |
-| LSTM | 4.343 | 4.329 | -0.014 | 4 | 4 |
-| PatchTST | 4.370 | 4.346 | -0.025 | 6 | 5 |
-| DLinear | 4.362 | 4.356 | -0.006 | 5 | 6 |
-| TimesNet | 4.426 | 4.450 | +0.024 | 7 | 7 |
-| TFT | 4.676 | 4.653 | -0.023 | 8 | 8 |
-| Informer | 4.932 | 4.864 | -0.068 | 10 | 9 |
-| Transformer | 4.895 | 4.892 | -0.003 | 9 | 10 |
-| Autoformer | 5.347 | 5.349 | +0.002 | 11 | 11 |
+| **MeteoFormer** | 4.151 | 4.255 | +0.104 | 2 | 1 |
+| iTransformer | 4.251 | 4.275 | +0.024 | 3 | 2 |
+| LSTM | 4.343 | 4.329 | -0.014 | 4 | 3 |
+| PatchTST | 4.370 | 4.346 | -0.025 | 6 | 4 |
+| DLinear | 4.362 | 4.356 | -0.006 | 5 | 5 |
+| TimesNet | 4.426 | 4.450 | +0.024 | 7 | 6 |
+| TFT | 4.676 | 4.653 | -0.023 | 8 | 7 |
+| Informer | 4.932 | 4.864 | -0.068 | 10 | 8 |
+| Transformer | 4.895 | 4.892 | -0.003 | 9 | 9 |
+| Autoformer | 5.347 | 5.349 | +0.002 | 11 | 10 |
+| Crossformer | 4.138 | _missing_ | | 1 | |
 
 ## Reading
 

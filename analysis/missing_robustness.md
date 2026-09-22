@@ -124,7 +124,7 @@ Ranking by MAE is **changed** between the clean test and 20 % missing.
 | DLinear | 4.361±0.008 | 4.369±0.008 | 4.378±0.010 | 4.400±0.011 | +0.89 |
 | **MeteoFormer** | 4.150±0.039 | 4.157±0.039 | 4.165±0.040 | 4.187±0.039 | +0.90 |
 | PatchTST | 4.369±0.046 | 4.377±0.047 | 4.386±0.046 | 4.411±0.046 | +0.94 |
-| Crossformer | 4.248±0.095 | 4.256±0.095 | 4.264±0.095 | 4.288±0.095 | +0.95 |
+| Crossformer | 4.137±0.023 | 4.144±0.021 | 4.153±0.021 | 4.177±0.021 | +0.96 |
 
 ### RMSE by missing rate (mean ± sd over 5 seeds)
 
@@ -140,14 +140,14 @@ Ranking by MAE is **changed** between the clean test and 20 % missing.
 | DLinear | 8.378±0.013 | 8.388±0.014 | 8.402±0.014 | 8.431±0.017 | +0.63 |
 | **MeteoFormer** | 8.220±0.049 | 8.228±0.049 | 8.243±0.051 | 8.278±0.051 | +0.71 |
 | PatchTST | 8.337±0.049 | 8.347±0.049 | 8.364±0.048 | 8.400±0.050 | +0.76 |
-| Crossformer | 8.009±0.174 | 8.021±0.177 | 8.037±0.182 | 8.073±0.187 | +0.80 |
+| Crossformer | 7.916±0.081 | 7.927±0.081 | 7.942±0.084 | 7.978±0.084 | +0.79 |
 
 ### Per-target degradation, Δ% of MAE at 20 % missing
 
 | Model | T | RH | P | WS |
 |---|---|---|---|---|
 | Autoformer | -0.70 | +0.26 | -0.09 | +0.10 |
-| Crossformer | +0.14 | +1.14 | +1.26 | +0.48 |
+| Crossformer | -0.22 | +1.15 | +1.51 | +0.42 |
 | DLinear | +1.22 | +0.91 | +0.61 | +0.77 |
 | Informer | +0.05 | +0.58 | +0.36 | +0.16 |
 | LSTM | -0.45 | +0.31 | +0.36 | +0.18 |
@@ -162,9 +162,9 @@ Ranking by MAE is **changed** between the clean test and 20 % missing.
 
 | Rank | clean (0 %) | 20 % missing |
 |---|---|---|
-| 1 | **MeteoFormer** | **MeteoFormer** |
-| 2 | Crossformer | iTransformer  ←changed |
-| 3 | iTransformer | Crossformer  ←changed |
+| 1 | Crossformer | Crossformer |
+| 2 | **MeteoFormer** | **MeteoFormer** |
+| 3 | iTransformer | iTransformer |
 | 4 | LSTM | LSTM |
 | 5 | DLinear | DLinear |
 | 6 | PatchTST | PatchTST |
@@ -174,7 +174,7 @@ Ranking by MAE is **changed** between the clean test and 20 % missing.
 | 10 | Informer | Informer |
 | 11 | Autoformer | Autoformer |
 
-Ranking by MAE is **changed** between the clean test and 20 % missing.
+Ranking by MAE is **unchanged** between the clean test and 20 % missing.
 
 
 ---
@@ -192,7 +192,7 @@ What does hold is **persistence of the first place**. Our model is first by MAE 
 | Dataset | 0 % | 5 % | 10 % | 20 % |
 |---|---|---|---|---|
 | Jena | +0.0824 vs Crossformer | +0.0841 vs Crossformer | +0.0848 vs Crossformer | +0.0867 vs Crossformer |
-| Beijing | +0.0976 vs Crossformer | +0.0989 vs Crossformer | +0.0977 vs iTransformer | +0.0935 vs iTransformer |
+| Beijing | +0.0132 vs XAI-MeteoFormer | +0.0127 vs XAI-MeteoFormer | +0.0119 vs XAI-MeteoFormer | +0.0108 vs XAI-MeteoFormer |
 
 The **rest** of the ranking is not stable: mid-field positions swap between the clean test and 20 % missing on both datasets (e.g. on Jena iTransformer/TimesNet and DLinear/Transformer exchange places). Those pairs are separated by less than their own seed sd, so the swaps carry no signal — but the paper should say "first place is unaffected", not "the ranking is unaffected", because the latter is checkably false.
 

@@ -10,7 +10,7 @@ Produced by [analysis/crossformer_fullwidth.py](analysis/crossformer_fullwidth.p
 
 | Configuration | params | n seeds | MAE | RMSE | R² |
 |---|---|---|---|---|---|
-| Crossformer 128x128 | 1,695,908 | 5 | 3.107 ± 0.018 | 5.166 ± 0.021 | 0.678 ± 0.004 |
+| Crossformer 128x128 | 1,695,908 | 5 | 3.137 ± 0.035 | 5.253 ± 0.095 | 0.670 ± 0.009 |
 | Crossformer 256x512 | 7,981,860 | 5 | 3.184 ± 0.073 | 5.241 ± 0.063 | 0.675 ± 0.004 |
 | Crossformer 256x1024 | 10,608,420 | 5 | 3.175 ± 0.042 | 5.237 ± 0.039 | 0.672 ± 0.005 |
 | MeteoFormer (ours) | 1,892,475 | 5 | 3.025 ± 0.031 | 5.267 ± 0.046 | 0.682 ± 0.005 |
@@ -27,8 +27,8 @@ Negative Δ favours the proposed model. `*` = p<0.05 after Holm within each colu
 
 ## Result
 
-- Crossformer 256x512: MAE 3.184 vs 3.107 at 128x128 (+0.077); vs ours 3.025 (-0.159).
-- Crossformer 256x1024: MAE 3.175 vs 3.107 at 128x128 (+0.067); vs ours 3.025 (-0.150).
+- Crossformer 256x512: MAE 3.184 vs 3.137 at 128x128 (+0.047); vs ours 3.025 (-0.159).
+- Crossformer 256x1024: MAE 3.175 vs 3.137 at 128x128 (+0.038); vs ours 3.025 (-0.150).
 
 ## How to read this
 

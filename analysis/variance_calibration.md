@@ -50,7 +50,7 @@ Our RMSE 5.267 → 5.162; Crossformer 5.166 → 5.153. Our MAE 3.025 → 3.019.
 |---|---|---|---|---|
 | **MeteoFormer** | 0.845 ± 0.019 | 0.819 | +0.025 | 0.933 |
 | Autoformer | 0.736 ± 0.043 | 0.821 | -0.085 | 0.839 |
-| Crossformer | 0.939 ± 0.056 | 0.916 | +0.023 | 0.849 |
+| Crossformer | 0.875 ± 0.018 | 0.914 | -0.040 | 0.849 |
 | DLinear | 0.840 ± 0.010 | 0.912 | -0.071 | 0.814 |
 | Informer | 0.817 ± 0.026 | 0.780 | +0.036 | 0.952 |
 | LSTM | 0.820 ± 0.016 | 0.885 | -0.064 | 0.870 |
@@ -66,7 +66,7 @@ Our RMSE 5.267 → 5.162; Crossformer 5.166 → 5.153. Our MAE 3.025 → 3.019.
 |---|---|---|---|---|---|---|
 | **MeteoFormer** | 4.151 | 4.157 | 8.216 | 8.057 | 252.42 | 242.40 |
 | Autoformer | 5.347 | 5.582 | 9.417 | 9.579 | 311.08 | 326.61 |
-| Crossformer | 4.247 | 4.319 | 8.002 | 7.931 | 230.74 | 225.14 |
+| Crossformer | 4.138 | 4.216 | 7.916 | 7.900 | 228.78 | 229.84 |
 | DLinear | 4.362 | 4.540 | 8.381 | 8.394 | 257.87 | 258.71 |
 | Informer | 4.932 | 4.913 | 8.965 | 8.617 | 283.82 | 261.02 |
 | LSTM | 4.343 | 4.512 | 8.103 | 8.219 | 237.74 | 247.69 |
@@ -76,7 +76,7 @@ Our RMSE 5.267 → 5.162; Crossformer 5.166 → 5.153. Our MAE 3.025 → 3.019.
 | Transformer | 4.895 | 5.020 | 8.923 | 8.867 | 285.88 | 285.12 |
 | iTransformer | 4.251 | 4.440 | 8.266 | 8.272 | 250.76 | 251.73 |
 
-Our RMSE 8.216 → 8.057; Crossformer 8.002 → 7.931. Our MAE 4.151 → 4.157.
+Our RMSE 8.216 → 8.057; Crossformer 7.916 → 7.900. Our MAE 4.151 → 4.157.
 
 ## Does the squared-loss deficit survive calibration?
 
@@ -85,7 +85,7 @@ Diebold–Mariano on the per-window loss, our model against Crossformer, **both 
 | Dataset | ΔL1 before | ΔL1 after | ΔL2 before | ΔL2 after |
 |---|---|---|---|---|
 | Jena | -0.0824 (9.93e-12) | -0.0845 (8.22e-15) | +1.0513 (1.63e-07) | +0.0934 (0.607) |
-| Beijing (Aotizhongxin) | -0.0964 (0.000492) | -0.1620 (3.48e-06) | +3.4437 (0.000365) | +2.0195 (0.0759) |
+| Beijing (Aotizhongxin) | +0.0128 (0.716) | -0.0583 (0.0755) | +4.8413 (0.000232) | +2.5140 (0.0331) |
 
 ## Reading
 
@@ -94,6 +94,8 @@ Diebold–Mariano on the per-window loss, our model against Crossformer, **both 
 
 **Answer to the question.** The coefficient is reachable: validation finds 0.868 on Jena against the test oracle's 0.861, a difference of 0.007 — inside the seed-to-seed spread. The two routes do **not** hit the same wall: training with MSE moved the dispersion only from 0.951 to 0.927 ([analysis/loss_mse.md](analysis/loss_mse.md)), while a coefficient fitted on validation reaches the optimum the test oracle wanted. The over-dispersion is therefore not a property of the Huber criterion; it is a scale the model does not learn but that a single validation-fitted number recovers.
 
-**Wording.** The deficit stops being *significant*; it is not closed. On Jena it is essentially gone (+0.09, p = 0.61); on Beijing it shrinks by about 40 % and its p-value sits at the border (+2.02, p = 0.076).
+**Wording.** On the squared loss the deficit is reduced everywhere, but it is not closed, and it does not stop being significant everywhere. Jena: +0.09, p = 0.607 — no longer significant; Beijing: +2.51, p = 0.0331 — **still significant**. Say what each dataset shows; do not generalise from Jena.
 
-What it does not do is change the paper: calibration is applied to every model, our MAE lead survives it and the squared-loss comparison with Crossformer is in the table above. The headline stays uncalibrated.
+On the absolute loss after calibration — Jena: -0.084, p = 8.22e-15 (significant, ours ahead); Beijing: -0.058, p = 0.0755 (not significant, ours ahead).
+
+Calibration is applied to every model and changes no headline number: the main table, the ablations and the fidelity analysis all stay uncalibrated. It is reported as an appendix analysis of the mechanism.

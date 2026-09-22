@@ -7,7 +7,7 @@ Produced by [analysis/cross_station.py](analysis/cross_station.py). Every model 
 | Model | MAE here | MAE in results_clean | |Δ| |
 |---|---|---|---|
 | Autoformer | 5.3472 | 5.3472 | 9.5e-07 |
-| Crossformer | 4.2470 | 4.2470 | 0.0e+00 |
+| Crossformer | 4.1377 | 4.1377 | 2.9e-07 |
 | DLinear | 4.3623 | 4.3623 | 0.0e+00 |
 | Informer | 4.9353 | 4.9320 | 3.3e-03 |
 | LSTM | 4.3427 | 4.3427 | 4.8e-07 |
@@ -26,9 +26,9 @@ Per model: the seed-mean MAE at each station, then mean ± sd across stations; i
 
 | Rank | Model | in-domain MAE | transfer MAE (mean ± sd over stations) | transfer RMSE | Δ vs in-domain | stations where 1st |
 |---|---|---|---|---|---|---|
-| 1 | MeteoFormer | 4.151 | 4.114 ± 0.068 | 8.125 ± 0.163 | -0.036 | 9/11 |
-| 2 | iTransformer | 4.251 | 4.183 ± 0.096 | 8.109 ± 0.204 | -0.068 | 2/11 |
-| 3 | Crossformer | 4.247 | 4.211 ± 0.076 | 7.876 ± 0.196 | -0.036 | 0/11 |
+| 1 | Crossformer | 4.138 | 4.093 ± 0.089 | 7.792 ± 0.198 | -0.045 | 8/11 |
+| 2 | MeteoFormer | 4.151 | 4.114 ± 0.068 | 8.125 ± 0.163 | -0.036 | 3/11 |
+| 3 | iTransformer | 4.251 | 4.183 ± 0.096 | 8.109 ± 0.204 | -0.068 | 0/11 |
 | 4 | DLinear | 4.362 | 4.281 ± 0.104 | 8.213 ± 0.224 | -0.081 | 0/11 |
 | 5 | PatchTST | 4.370 | 4.314 ± 0.106 | 8.203 ± 0.231 | -0.056 | 0/11 |
 | 6 | LSTM | 4.343 | 4.315 ± 0.091 | 8.003 ± 0.208 | -0.028 | 0/11 |
@@ -44,19 +44,19 @@ Kendall τ between the in-domain ranking (Aotizhongxin) and the ranking at each 
 
 | Station | winner | MeteoFormer rank | Kendall τ vs in-domain |
 |---|---|---|---|
-| Changping | iTransformer | 2 / 11 | 0.85 |
-| Dingling | iTransformer | 2 / 11 | 0.85 |
-| Dongsi | MeteoFormer | 1 / 11 | 0.96 |
-| Guanyuan | MeteoFormer | 1 / 11 | 0.96 |
+| Changping | Crossformer | 3 / 11 | 0.89 |
+| Dingling | Crossformer | 3 / 11 | 0.89 |
+| Dongsi | Crossformer | 2 / 11 | 1.00 |
+| Guanyuan | Crossformer | 2 / 11 | 1.00 |
 | Gucheng | MeteoFormer | 1 / 11 | 0.89 |
-| Huairou | MeteoFormer | 1 / 11 | 0.78 |
-| Nongzhanguan | MeteoFormer | 1 / 11 | 1.00 |
-| Shunyi | MeteoFormer | 1 / 11 | 0.96 |
-| Tiantan | MeteoFormer | 1 / 11 | 1.00 |
+| Huairou | MeteoFormer | 1 / 11 | 0.82 |
+| Nongzhanguan | Crossformer | 2 / 11 | 1.00 |
+| Shunyi | Crossformer | 2 / 11 | 0.96 |
+| Tiantan | Crossformer | 2 / 11 | 1.00 |
 | Wanliu | MeteoFormer | 1 / 11 | 0.93 |
-| Wanshouxigong | MeteoFormer | 1 / 11 | 0.96 |
+| Wanshouxigong | Crossformer | 2 / 11 | 1.00 |
 
-Kendall τ over stations: mean 0.92, min 0.78, max 1.00.
+Kendall τ over stations: mean 0.94, min 0.82, max 1.00.
 
 Per-channel replication: the error budget behind these aggregates is the same in domain and on the unseen stations — our deficit against Crossformer is the humidity channel and nothing else (in domain RH +21.8, transfer +24.1 in MSE units, while temperature stays at -7.8 / -8.2 in our favour). See the replication section of [analysis/error_decomposition.md](analysis/error_decomposition.md).
 
@@ -64,9 +64,9 @@ Per-channel replication: the error budget behind these aggregates is the same in
 
 | Model | Changping | Dingling | Dongsi | Guanyuan | Gucheng | Huairou | Nongzhanguan | Shunyi | Tiantan | Wanliu | Wanshouxigong |
 |---|---|---|---|---|---|---|---|---|---|---|---|
+| Crossformer | 3.937 | 3.942 | 4.129 | 4.136 | 4.135 | 4.151 | 4.135 | 3.994 | 4.149 | 4.177 | 4.139 |
 | MeteoFormer | 4.010 | 4.017 | 4.176 | 4.168 | 4.111 | 4.084 | 4.178 | 4.036 | 4.178 | 4.121 | 4.179 |
 | iTransformer | 4.009 | 4.017 | 4.258 | 4.245 | 4.187 | 4.162 | 4.254 | 4.120 | 4.252 | 4.257 | 4.249 |
-| Crossformer | 4.086 | 4.103 | 4.261 | 4.257 | 4.239 | 4.263 | 4.250 | 4.091 | 4.245 | 4.268 | 4.255 |
 | DLinear | 4.104 | 4.104 | 4.362 | 4.362 | 4.301 | 4.228 | 4.362 | 4.199 | 4.362 | 4.342 | 4.362 |
 | PatchTST | 4.114 | 4.114 | 4.370 | 4.370 | 4.349 | 4.359 | 4.370 | 4.255 | 4.370 | 4.417 | 4.370 |
 | LSTM | 4.178 | 4.161 | 4.330 | 4.335 | 4.353 | 4.470 | 4.340 | 4.224 | 4.349 | 4.380 | 4.341 |

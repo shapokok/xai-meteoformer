@@ -187,6 +187,7 @@ def main():
       "Negative favours our model.\n")
     W("| Dataset | ΔL1 before | ΔL1 after | ΔL2 before | ΔL2 after |")
     W("|---|---|---|---|---|")
+    after = {}
     for ds, title in DATASETS:
         tt = np.load(os.path.join(PRED, f"{ds}_true.npy")).astype(np.float64)
         cells = []
@@ -200,6 +201,8 @@ def main():
                     sig.window_loss(got[OURS], tt, kind),
                     sig.window_loss(got["Crossformer"], tt, kind))
                 pair.append(f"{md_:+.4f} ({'<1e-15' if pv < 1e-15 else f'{pv:.3g}'})")
+                if calibrated:
+                    after[(ds, kind)] = (md_, pv)
             cells.append(pair)
         W(f"| {title} | {cells[0][0]} | {cells[0][1]} | {cells[1][0]} | {cells[1][1]} |")
     W("")
@@ -225,12 +228,27 @@ def main():
       "over-dispersion is therefore not a property of the Huber criterion; it is "
       "a scale the model does not learn but that a single validation-fitted "
       "number recovers.\n")
-    W("**Wording.** The deficit stops being *significant*; it is not closed. On "
-      "Jena it is essentially gone (+0.09, p = 0.61); on Beijing it shrinks by "
-      "about 40 % and its p-value sits at the border (+2.02, p = 0.076).\n")
-    W("What it does not do is change the paper: calibration is applied to every "
-      "model, our MAE lead survives it and the squared-loss comparison with "
-      "Crossformer is in the table above. The headline stays uncalibrated.\n")
+    bits = []
+    for ds, title in DATASETS:
+        md_, pv = after[(ds, "sq")]
+        bits.append(f"{title.split(' ')[0]}: {md_:+.2f}, p = {pv:.3g} — "
+                    + ("no longer significant" if pv >= 0.05 else
+                       "**still significant**"))
+    W("**Wording.** On the squared loss the deficit is reduced everywhere, but "
+      "it is not closed, and it does not stop being significant everywhere. "
+      + "; ".join(bits) + ". Say what each dataset shows; do not generalise "
+      "from Jena.\n")
+    l1 = []
+    for ds, title in DATASETS:
+        md_, pv = after[(ds, "abs")]
+        who = "ours" if md_ < 0 else "Crossformer"
+        l1.append(f"{title.split(' ')[0]}: {md_:+.3f}, p = {pv:.3g} "
+                  f"({'significant, ' if pv < 0.05 else 'not significant, '}"
+                  f"{who} ahead)")
+    W("On the absolute loss after calibration — " + "; ".join(l1) + ".\n")
+    W("Calibration is applied to every model and changes no headline number: "
+      "the main table, the ablations and the fidelity analysis all stay "
+      "uncalibrated. It is reported as an appendix analysis of the mechanism.\n")
     open(os.path.join(ROOT, "analysis", "variance_calibration.md"), "w").write("\n".join(L))
 
     lines = ["\\begin{tabular}{llcccc}", "\\toprule",

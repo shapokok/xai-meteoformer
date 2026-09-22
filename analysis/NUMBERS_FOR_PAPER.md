@@ -28,8 +28,8 @@ Headline model: `XAI-MeteoFormer`, ablation `no_revin`, seq_len 96, HuberLoss(de
 
 | Model | Norm. | params | MAE | RMSE | MSE | SMAPE | R2 | seeds |
 |---|---|---|---|---|---|---|---|---|
+| Crossformer | **on** — switched by the validation rule | 1,694,664 | 4.137741 ± 0.023007 | 7.915570 ± 0.079936 | 62.661357 ± 1.268713 | 27.001693 ± 0.338128 | 0.654311 ± 0.004320 | 5 |
 | **MeteoFormer** | off (ours, ablation no_revin) | 1,892,219 | 4.150543 ± 0.038510 | 8.215882 ± 0.048692 | 67.502608 ± 0.798442 | 26.693307 ± 0.229056 | 0.658624 ± 0.002470 | 5 |
-| Crossformer | off — validation rule keeps the historical variant | 1,694,628 | 4.246992 ± 0.094692 | 8.002205 ± 0.172030 | 64.058959 ± 2.748563 | 27.508176 ± 0.442520 | 0.657408 ± 0.009974 | 5 |
 | iTransformer | off — validation rule keeps the historical variant | 1,611,032 | 4.251023 ± 0.017274 | 8.265865 ± 0.032600 | 68.325368 ± 0.538478 | 27.313134 ± 0.076294 | 0.623825 ± 0.001236 | 5 |
 | LSTM | on — validation rule keeps the historical variant | 833,668 | 4.342733 ± 0.033950 | 8.103445 ± 0.027327 | 65.666425 ± 0.443695 | 27.538537 ± 0.146192 | 0.637946 ± 0.002491 | 5 |
 | DLinear | off — validation rule keeps the historical variant | 4,656 | 4.362253 ± 0.007909 | 8.380522 ± 0.012731 | 70.233278 ± 0.213415 | 27.739556 ± 0.206204 | 0.621243 ± 0.001150 | 5 |
@@ -78,8 +78,8 @@ Autoformer$^{\dagger}$ & 3.904 $\pm$ 0.047 & 6.203 $\pm$ 0.070 & 0.549 $\pm$ 0.0
 \toprule
 Model & MAE & RMSE & $R^2$ \\
 \midrule
-\textbf{MeteoFormer} & \textbf{4.151 $\pm$ 0.039} & 8.216 $\pm$ 0.049 & \textbf{0.659 $\pm$ 0.002} \\
-Crossformer & 4.247 $\pm$ 0.095 & \textbf{8.002 $\pm$ 0.172} & 0.657 $\pm$ 0.010 \\
+Crossformer$^{\dagger}$ & \textbf{4.138 $\pm$ 0.023} & \textbf{7.916 $\pm$ 0.080} & 0.654 $\pm$ 0.004 \\
+\textbf{MeteoFormer} & 4.151 $\pm$ 0.039 & 8.216 $\pm$ 0.049 & \textbf{0.659 $\pm$ 0.002} \\
 iTransformer & 4.251 $\pm$ 0.017 & 8.266 $\pm$ 0.033 & 0.624 $\pm$ 0.001 \\
 LSTM$^{\dagger}$ & 4.343 $\pm$ 0.034 & 8.103 $\pm$ 0.027 & 0.638 $\pm$ 0.002 \\
 DLinear & 4.362 $\pm$ 0.008 & 8.381 $\pm$ 0.013 & 0.621 $\pm$ 0.001 \\
@@ -184,7 +184,7 @@ iTransformer & -0.270$^{*}$ & $<$0.001 & -3.186$^{*}$ & $<$0.001 \\
 Baseline & $\Delta L_1$ & $p_{\mathrm{Holm}}$ & $\Delta L_2$ & $p_{\mathrm{Holm}}$ \\
 \midrule
 Autoformer & -1.197$^{*}$ & $<$0.001 & -21.200$^{*}$ & $<$0.001 \\
-Crossformer & -0.096$^{*}$ & $<$0.001 & +3.444$^{*}$ & 0.003 \\
+Crossformer & +0.013 & 0.716 & +4.841$^{*}$ & 0.002 \\
 DLinear & -0.212$^{*}$ & $<$0.001 & -2.731 & 0.442 \\
 Informer & -0.781$^{*}$ & $<$0.001 & -12.886$^{*}$ & $<$0.001 \\
 LSTM & -0.192$^{*}$ & $<$0.001 & +1.836 & 0.631 \\
@@ -192,7 +192,7 @@ PatchTST & -0.220$^{*}$ & $<$0.001 & -1.994 & 0.631 \\
 TFT & -0.525$^{*}$ & $<$0.001 & -3.603$^{*}$ & 0.014 \\
 TimesNet & -0.275$^{*}$ & $<$0.001 & -0.948 & 1.000 \\
 Transformer & -0.744$^{*}$ & $<$0.001 & -12.121$^{*}$ & $<$0.001 \\
-iTransformer & -0.100$^{*}$ & 0.016 & -0.823 & 1.000 \\
+iTransformer & -0.100$^{*}$ & 0.032 & -0.823 & 1.000 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -238,7 +238,7 @@ iTransformer & -0.378$^{*}$ & -0.342$^{*}$ & -0.291$^{*}$ & -0.069$^{*}$ & -2.94
 Baseline & T & RH & P & WS & T & RH & P & WS \\
 \midrule
 Autoformer & -1.120$^{*}$ & -1.939$^{*}$ & -1.683$^{*}$ & -0.044$^{*}$ & -9.228$^{*}$ & -58.658$^{*}$ & -16.772$^{*}$ & -0.141$^{*}$ \\
-Crossformer & -1.024$^{*}$ & +0.580$^{*}$ & +0.041 & +0.016$^{*}$ & -7.853$^{*}$ & +21.682$^{*}$ & -0.064 & +0.010 \\
+Crossformer & -0.526$^{*}$ & +0.567$^{*}$ & +0.019 & -0.009$^{*}$ & -3.857$^{*}$ & +23.643$^{*}$ & -0.386 & -0.034$^{*}$ \\
 DLinear & -0.008 & -0.216 & -0.568$^{*}$ & -0.055$^{*}$ & -0.084 & -5.454 & -5.277$^{*}$ & -0.107$^{*}$ \\
 Informer & -1.731$^{*}$ & -0.750$^{*}$ & -0.617$^{*}$ & -0.028$^{*}$ & -15.515$^{*}$ & -31.404$^{*}$ & -4.558$^{*}$ & -0.068$^{*}$ \\
 LSTM & -0.557$^{*}$ & +0.141 & -0.328$^{*}$ & -0.025$^{*}$ & -4.335$^{*}$ & +14.681$^{*}$ & -2.939$^{*}$ & -0.062$^{*}$ \\
@@ -292,9 +292,9 @@ iTransformer & 2.332 $\pm$ 0.061 & 7.494 $\pm$ 0.036 & 2.436 $\pm$ 0.051 & 0.918
 \toprule
 Model & T ($^\circ$C) & RH (\%) & P (mbar) & WS (m\,s$^{-1}$) \\
 \midrule
-\textbf{MeteoFormer} & \textbf{2.019 $\pm$ 0.048} & 11.668 $\pm$ 0.107 & 2.249 $\pm$ 0.024 & 0.667 $\pm$ 0.006 \\
+\textbf{MeteoFormer} & \textbf{2.019 $\pm$ 0.048} & 11.668 $\pm$ 0.107 & 2.249 $\pm$ 0.024 & \textbf{0.667 $\pm$ 0.006} \\
 Autoformer & 3.139 $\pm$ 0.101 & 13.607 $\pm$ 0.273 & 3.932 $\pm$ 0.103 & 0.711 $\pm$ 0.009 \\
-Crossformer & 3.043 $\pm$ 0.213 & \textbf{11.088 $\pm$ 0.243} & \textbf{2.207 $\pm$ 0.051} & \textbf{0.650 $\pm$ 0.003} \\
+Crossformer & 2.545 $\pm$ 0.118 & \textbf{11.101 $\pm$ 0.082} & \textbf{2.230 $\pm$ 0.012} & 0.676 $\pm$ 0.006 \\
 DLinear & 2.026 $\pm$ 0.035 & 11.884 $\pm$ 0.003 & 2.817 $\pm$ 0.006 & 0.722 $\pm$ 0.002 \\
 Informer & 3.749 $\pm$ 0.281 & 12.418 $\pm$ 0.280 & 2.866 $\pm$ 0.222 & 0.694 $\pm$ 0.011 \\
 LSTM & 2.576 $\pm$ 0.050 & 11.527 $\pm$ 0.090 & 2.576 $\pm$ 0.079 & 0.692 $\pm$ 0.006 \\
@@ -344,9 +344,9 @@ iTransformer & 3.071 $\pm$ 0.078 & 10.022 $\pm$ 0.048 & 3.479 $\pm$ 0.057 & 1.31
 \toprule
 Model & T ($^\circ$C) & RH (\%) & P (mbar) & WS (m\,s$^{-1}$) \\
 \midrule
-\textbf{MeteoFormer} & \textbf{2.624 $\pm$ 0.050} & 15.887 $\pm$ 0.099 & \textbf{3.132 $\pm$ 0.030} & 0.946 $\pm$ 0.009 \\
+\textbf{MeteoFormer} & \textbf{2.624 $\pm$ 0.050} & 15.887 $\pm$ 0.099 & \textbf{3.132 $\pm$ 0.030} & \textbf{0.946 $\pm$ 0.009} \\
 Autoformer & 4.013 $\pm$ 0.112 & 17.635 $\pm$ 0.345 & 5.154 $\pm$ 0.118 & 1.018 $\pm$ 0.011 \\
-Crossformer & 3.834 $\pm$ 0.233 & \textbf{15.187 $\pm$ 0.312} & 3.141 $\pm$ 0.060 & \textbf{0.941 $\pm$ 0.011} \\
+Crossformer & 3.276 $\pm$ 0.125 & \textbf{15.124 $\pm$ 0.181} & 3.193 $\pm$ 0.014 & 0.964 $\pm$ 0.007 \\
 DLinear & 2.640 $\pm$ 0.031 & 16.058 $\pm$ 0.030 & 3.884 $\pm$ 0.005 & 1.001 $\pm$ 0.002 \\
 Informer & 4.726 $\pm$ 0.285 & 16.844 $\pm$ 0.386 & 3.785 $\pm$ 0.211 & 0.982 $\pm$ 0.009 \\
 LSTM & 3.350 $\pm$ 0.053 & 15.419 $\pm$ 0.076 & 3.569 $\pm$ 0.090 & 0.979 $\pm$ 0.003 \\
@@ -396,9 +396,9 @@ iTransformer & 0.856 $\pm$ 0.007 & 0.620 $\pm$ 0.004 & 0.822 $\pm$ 0.006 & 0.209
 \toprule
 Model & T & RH & P & WS \\
 \midrule
-\textbf{MeteoFormer} & \textbf{0.955 $\pm$ 0.002} & 0.553 $\pm$ 0.006 & \textbf{0.917 $\pm$ 0.002} & 0.210 $\pm$ 0.014 \\
+\textbf{MeteoFormer} & \textbf{0.955 $\pm$ 0.002} & 0.553 $\pm$ 0.006 & \textbf{0.917 $\pm$ 0.002} & \textbf{0.210 $\pm$ 0.014} \\
 Autoformer & 0.894 $\pm$ 0.006 & 0.450 $\pm$ 0.021 & 0.774 $\pm$ 0.010 & 0.085 $\pm$ 0.021 \\
-Crossformer & 0.903 $\pm$ 0.012 & \textbf{0.592 $\pm$ 0.017} & 0.916 $\pm$ 0.003 & \textbf{0.219 $\pm$ 0.018} \\
+Crossformer & 0.929 $\pm$ 0.005 & \textbf{0.595 $\pm$ 0.010} & 0.913 $\pm$ 0.001 & 0.179 $\pm$ 0.012 \\
 DLinear & 0.954 $\pm$ 0.001 & 0.544 $\pm$ 0.002 & 0.872 $\pm$ 0.000 & 0.115 $\pm$ 0.004 \\
 Informer & 0.852 $\pm$ 0.018 & 0.498 $\pm$ 0.023 & 0.878 $\pm$ 0.013 & 0.149 $\pm$ 0.016 \\
 LSTM & 0.926 $\pm$ 0.002 & 0.579 $\pm$ 0.004 & 0.892 $\pm$ 0.006 & 0.155 $\pm$ 0.006 \\
@@ -448,9 +448,9 @@ iTransformer & 1.273 $\pm$ 0.031 & 2.756 $\pm$ 0.017 & 3.520 $\pm$ 0.018 & 4.179
 \toprule
 Model & $h$=1 & $h$=6 & $h$=12 & $h$=24 \\
 \midrule
-\textbf{MeteoFormer} & 1.842 $\pm$ 0.133 & \textbf{3.448 $\pm$ 0.070} & \textbf{4.350 $\pm$ 0.054} & \textbf{5.207 $\pm$ 0.072} \\
+\textbf{MeteoFormer} & 1.842 $\pm$ 0.133 & \textbf{3.448 $\pm$ 0.070} & 4.350 $\pm$ 0.054 & \textbf{5.207 $\pm$ 0.072} \\
 Autoformer & 4.372 $\pm$ 0.173 & 4.843 $\pm$ 0.159 & 5.432 $\pm$ 0.109 & 6.181 $\pm$ 0.117 \\
-Crossformer & 2.125 $\pm$ 0.125 & 3.615 $\pm$ 0.140 & 4.435 $\pm$ 0.082 & 5.281 $\pm$ 0.078 \\
+Crossformer & 1.881 $\pm$ 0.055 & 3.452 $\pm$ 0.047 & \textbf{4.337 $\pm$ 0.042} & 5.220 $\pm$ 0.027 \\
 DLinear & \textbf{1.545 $\pm$ 0.041} & 3.820 $\pm$ 0.019 & 4.746 $\pm$ 0.005 & 5.314 $\pm$ 0.015 \\
 Informer & 3.387 $\pm$ 0.350 & 4.293 $\pm$ 0.113 & 5.032 $\pm$ 0.103 & 5.725 $\pm$ 0.056 \\
 LSTM & 2.718 $\pm$ 0.091 & 3.728 $\pm$ 0.062 & 4.476 $\pm$ 0.062 & 5.301 $\pm$ 0.044 \\
@@ -502,10 +502,10 @@ Model & $h$=1 & $h$=6 & $h$=12 & $h$=24 \\
 \midrule
 \textbf{MeteoFormer} & 3.487 $\pm$ 0.159 & 6.824 $\pm$ 0.097 & 8.478 $\pm$ 0.141 & 9.788 $\pm$ 0.139 \\
 Autoformer & 7.377 $\pm$ 0.294 & 8.464 $\pm$ 0.271 & 9.543 $\pm$ 0.213 & 10.914 $\pm$ 0.195 \\
-Crossformer & 3.563 $\pm$ 0.143 & \textbf{6.744 $\pm$ 0.193} & 8.340 $\pm$ 0.171 & \textbf{9.554 $\pm$ 0.256} \\
+Crossformer & 3.334 $\pm$ 0.091 & \textbf{6.606 $\pm$ 0.069} & \textbf{8.167 $\pm$ 0.113} & \textbf{9.554 $\pm$ 0.115} \\
 DLinear & \textbf{3.053 $\pm$ 0.032} & 7.285 $\pm$ 0.013 & 8.942 $\pm$ 0.016 & 9.686 $\pm$ 0.023 \\
 Informer & 5.571 $\pm$ 0.592 & 7.778 $\pm$ 0.295 & 9.172 $\pm$ 0.190 & 10.253 $\pm$ 0.245 \\
-LSTM & 4.795 $\pm$ 0.139 & 6.962 $\pm$ 0.066 & \textbf{8.333 $\pm$ 0.042} & 9.560 $\pm$ 0.083 \\
+LSTM & 4.795 $\pm$ 0.139 & 6.962 $\pm$ 0.066 & 8.333 $\pm$ 0.042 & 9.560 $\pm$ 0.083 \\
 PatchTST & 3.579 $\pm$ 0.276 & 7.237 $\pm$ 0.072 & 8.827 $\pm$ 0.065 & 9.674 $\pm$ 0.041 \\
 TFT & 5.684 $\pm$ 0.393 & 7.308 $\pm$ 0.220 & 8.617 $\pm$ 0.173 & 9.834 $\pm$ 0.170 \\
 TimesNet & 5.061 $\pm$ 0.280 & 7.100 $\pm$ 0.104 & 8.462 $\pm$ 0.076 & 9.771 $\pm$ 0.044 \\
@@ -554,7 +554,7 @@ Model & $h$=1 & $h$=6 & $h$=12 & $h$=24 \\
 \midrule
 \textbf{MeteoFormer} & 0.875 $\pm$ 0.005 & \textbf{0.722 $\pm$ 0.004} & \textbf{0.640 $\pm$ 0.005} & \textbf{0.562 $\pm$ 0.006} \\
 Autoformer & 0.688 $\pm$ 0.017 & 0.609 $\pm$ 0.016 & 0.538 $\pm$ 0.015 & 0.444 $\pm$ 0.012 \\
-Crossformer & 0.867 $\pm$ 0.005 & 0.719 $\pm$ 0.006 & 0.633 $\pm$ 0.013 & 0.559 $\pm$ 0.014 \\
+Crossformer & 0.875 $\pm$ 0.002 & 0.720 $\pm$ 0.003 & 0.634 $\pm$ 0.005 & 0.546 $\pm$ 0.008 \\
 DLinear & \textbf{0.883 $\pm$ 0.001} & 0.677 $\pm$ 0.001 & 0.581 $\pm$ 0.001 & 0.531 $\pm$ 0.002 \\
 Informer & 0.785 $\pm$ 0.019 & 0.651 $\pm$ 0.006 & 0.579 $\pm$ 0.012 & 0.515 $\pm$ 0.012 \\
 LSTM & 0.810 $\pm$ 0.007 & 0.697 $\pm$ 0.005 & 0.623 $\pm$ 0.004 & 0.543 $\pm$ 0.005 \\
@@ -590,8 +590,8 @@ _Beijing (Aotizhongxin)_
 
 | Model | MAPE_RH | MAPE_P |
 |---|---|---|
+| Crossformer | 26.571402 ± 0.486512 | 0.219637 ± 0.001157 |
 | **MeteoFormer** | 27.506128 ± 0.355917 | 0.221627 ± 0.002340 |
-| Crossformer | 27.197920 ± 0.878783 | 0.217340 ± 0.005016 |
 | iTransformer | 27.681915 ± 0.460486 | 0.266708 ± 0.003416 |
 | LSTM | 27.028656 ± 0.623183 | 0.253855 ± 0.007789 |
 | DLinear | 29.540262 ± 0.113459 | 0.277506 ± 0.000583 |
@@ -610,7 +610,7 @@ _Beijing (Aotizhongxin)_
 
 | Configuration | params | n seeds | MAE | RMSE | R² |
 |---|---|---|---|---|---|
-| Crossformer 128x128 | 1,695,908 | 5 | 3.107 ± 0.018 | 5.166 ± 0.021 | 0.678 ± 0.004 |
+| Crossformer 128x128 | 1,695,908 | 5 | 3.137 ± 0.035 | 5.253 ± 0.095 | 0.670 ± 0.009 |
 | Crossformer 256x512 | 7,981,860 | 5 | 3.184 ± 0.073 | 5.241 ± 0.063 | 0.675 ± 0.004 |
 | Crossformer 256x1024 | 10,608,420 | 5 | 3.175 ± 0.042 | 5.237 ± 0.039 | 0.672 ± 0.005 |
 | MeteoFormer (ours) | 1,892,475 | 5 | 3.025 ± 0.031 | 5.267 ± 0.046 | 0.682 ± 0.005 |
@@ -627,8 +627,8 @@ Negative Δ favours the proposed model. `*` = p<0.05 after Holm within each colu
 
 ## Result
 
-- Crossformer 256x512: MAE 3.184 vs 3.107 at 128x128 (+0.077); vs ours 3.025 (-0.159).
-- Crossformer 256x1024: MAE 3.175 vs 3.107 at 128x128 (+0.067); vs ours 3.025 (-0.150).
+- Crossformer 256x512: MAE 3.184 vs 3.137 at 128x128 (+0.047); vs ours 3.025 (-0.159).
+- Crossformer 256x1024: MAE 3.175 vs 3.137 at 128x128 (+0.038); vs ours 3.025 (-0.150).
 
 **`analysis/ablation_norevin.md`**
 
@@ -749,11 +749,11 @@ Autoformer & 0.963 $\pm$ 0.001 & 0.649 $\pm$ 0.021 & 0.601 $\pm$ 0.018 & 0.612 $
 \toprule
 Model & AUC & AP & F1 & Precision & Recall \\
 \midrule
-Crossformer & 0.977 $\pm$ 0.001 & 0.889 $\pm$ 0.006 & 0.817 $\pm$ 0.006 & 0.777 $\pm$ 0.030 & 0.865 $\pm$ 0.035 \\
 \textbf{MeteoFormer} & 0.973 $\pm$ 0.002 & 0.872 $\pm$ 0.007 & 0.793 $\pm$ 0.018 & 0.776 $\pm$ 0.024 & 0.814 $\pm$ 0.060 \\
 iTransformer & 0.973 $\pm$ 0.000 & 0.870 $\pm$ 0.002 & 0.762 $\pm$ 0.006 & 0.835 $\pm$ 0.003 & 0.700 $\pm$ 0.011 \\
 Informer & 0.972 $\pm$ 0.001 & 0.869 $\pm$ 0.007 & 0.793 $\pm$ 0.002 & 0.729 $\pm$ 0.024 & 0.872 $\pm$ 0.038 \\
 DLinear & 0.972 $\pm$ 0.001 & 0.867 $\pm$ 0.002 & 0.714 $\pm$ 0.023 & 0.869 $\pm$ 0.010 & 0.607 $\pm$ 0.037 \\
+Crossformer & 0.973 $\pm$ 0.002 & 0.862 $\pm$ 0.012 & 0.782 $\pm$ 0.024 & 0.804 $\pm$ 0.027 & 0.765 $\pm$ 0.062 \\
 PatchTST & 0.970 $\pm$ 0.001 & 0.855 $\pm$ 0.009 & 0.748 $\pm$ 0.006 & 0.834 $\pm$ 0.006 & 0.679 $\pm$ 0.008 \\
 TimesNet & 0.972 $\pm$ 0.001 & 0.855 $\pm$ 0.008 & 0.802 $\pm$ 0.006 & 0.775 $\pm$ 0.015 & 0.832 $\pm$ 0.020 \\
 Transformer & 0.970 $\pm$ 0.001 & 0.852 $\pm$ 0.006 & 0.771 $\pm$ 0.015 & 0.801 $\pm$ 0.024 & 0.745 $\pm$ 0.050 \\
@@ -1312,23 +1312,23 @@ Under an outage in the last 16 h our model falls from **1st to 6th** by MAE.
 | Informer | 4.935±0.092 | 7.033±0.050 | 5.172±0.089 | **+42.5%** | +4.8% |
 | PatchTST | 4.369±0.046 | 6.394±0.045 | 4.469±0.043 | **+46.3%** | +2.3% |
 | iTransformer | 4.250±0.017 | 6.249±0.076 | 4.354±0.013 | **+47.0%** | +2.4% |
-| Crossformer | 4.248±0.095 | 6.338±0.178 | 4.295±0.085 | **+49.2%** | +1.1% |
+| Crossformer | 4.137±0.023 | 6.152±0.093 | 4.215±0.027 | **+48.7%** | +1.9% |
 | DLinear | 4.361±0.008 | 6.587±0.034 | 4.487±0.009 | **+51.0%** | +2.9% |
 | LSTM | 4.343±0.034 | 6.893±0.116 | 4.432±0.039 | **+58.7%** | +2.0% |
 | **MeteoFormer** | 4.150±0.039 | 6.637±0.244 | 4.167±0.040 | **+59.9%** | +0.4% |
 | TFT | 4.676±0.177 | 8.070±0.112 | 4.814±0.172 | **+72.7%** | +3.0% |
 
-Across all 55 (model, seed) pairs, losing the **last** 16 h costs **+45.9%** MAE on average, losing the **first** 16 h costs **+2.3%**. Paired Wilcoxon A vs B: p = 1.1e-10. A is worse than B for **55 of 55** pairs.
+Across all 55 (model, seed) pairs, losing the **last** 16 h costs **+45.8%** MAE on average, losing the **first** 16 h costs **+2.4%**. Paired Wilcoxon A vs B: p = 1.1e-10. A is worse than B for **55 of 55** pairs.
 
 ### Does first place survive an outage in the last 16 h?
 
 | Rank | intact | A: last 16 h lost |
 |---|---|---|
-| 1 | **MeteoFormer** 4.150 | Autoformer 6.007 |
-| 2 | Crossformer 4.248 | TimesNet 6.110 |
-| 3 | iTransformer 4.250 | Transformer 6.196 |
-| 4 | LSTM 4.343 | iTransformer 6.249 |
-| 5 | DLinear 4.361 | Crossformer 6.338 |
+| 1 | Crossformer 4.137 | Autoformer 6.007 |
+| 2 | **MeteoFormer** 4.150 | TimesNet 6.110 |
+| 3 | iTransformer 4.250 | Crossformer 6.152 |
+| 4 | LSTM 4.343 | Transformer 6.196 |
+| 5 | DLinear 4.361 | iTransformer 6.249 |
 | 6 | PatchTST 4.369 | PatchTST 6.394 |
 | 7 | TimesNet 4.426 | DLinear 6.587 |
 | 8 | TFT 4.676 | **MeteoFormer** 6.637 |
@@ -1343,7 +1343,7 @@ Under an outage in the last 16 h our model falls from **1st to 8th** by MAE.
 | Model | T | RH | P | WS |
 |---|---|---|---|---|
 | Autoformer | -1 | +16 | +10 | +7 |
-| Crossformer | +30 | +51 | +77 | +17 |
+| Crossformer | +30 | +48 | +82 | +16 |
 | DLinear | +68 | +52 | +42 | +28 |
 | Informer | +21 | +50 | +43 | +21 |
 | LSTM | +43 | +63 | +65 | +23 |
@@ -1446,7 +1446,7 @@ Ranking by MAE is **changed** between the clean test and 20 % missing.
 | DLinear | 4.361±0.008 | 4.369±0.008 | 4.378±0.010 | 4.400±0.011 | +0.89 |
 | **MeteoFormer** | 4.150±0.039 | 4.157±0.039 | 4.165±0.040 | 4.187±0.039 | +0.90 |
 | PatchTST | 4.369±0.046 | 4.377±0.047 | 4.386±0.046 | 4.411±0.046 | +0.94 |
-| Crossformer | 4.248±0.095 | 4.256±0.095 | 4.264±0.095 | 4.288±0.095 | +0.95 |
+| Crossformer | 4.137±0.023 | 4.144±0.021 | 4.153±0.021 | 4.177±0.021 | +0.96 |
 
 ### RMSE by missing rate (mean ± sd over 5 seeds)
 
@@ -1462,14 +1462,14 @@ Ranking by MAE is **changed** between the clean test and 20 % missing.
 | DLinear | 8.378±0.013 | 8.388±0.014 | 8.402±0.014 | 8.431±0.017 | +0.63 |
 | **MeteoFormer** | 8.220±0.049 | 8.228±0.049 | 8.243±0.051 | 8.278±0.051 | +0.71 |
 | PatchTST | 8.337±0.049 | 8.347±0.049 | 8.364±0.048 | 8.400±0.050 | +0.76 |
-| Crossformer | 8.009±0.174 | 8.021±0.177 | 8.037±0.182 | 8.073±0.187 | +0.80 |
+| Crossformer | 7.916±0.081 | 7.927±0.081 | 7.942±0.084 | 7.978±0.084 | +0.79 |
 
 ### Per-target degradation, Δ% of MAE at 20 % missing
 
 | Model | T | RH | P | WS |
 |---|---|---|---|---|
 | Autoformer | -0.70 | +0.26 | -0.09 | +0.10 |
-| Crossformer | +0.14 | +1.14 | +1.26 | +0.48 |
+| Crossformer | -0.22 | +1.15 | +1.51 | +0.42 |
 | DLinear | +1.22 | +0.91 | +0.61 | +0.77 |
 | Informer | +0.05 | +0.58 | +0.36 | +0.16 |
 | LSTM | -0.45 | +0.31 | +0.36 | +0.18 |
@@ -1484,9 +1484,9 @@ Ranking by MAE is **changed** between the clean test and 20 % missing.
 
 | Rank | clean (0 %) | 20 % missing |
 |---|---|---|
-| 1 | **MeteoFormer** | **MeteoFormer** |
-| 2 | Crossformer | iTransformer  ←changed |
-| 3 | iTransformer | Crossformer  ←changed |
+| 1 | Crossformer | Crossformer |
+| 2 | **MeteoFormer** | **MeteoFormer** |
+| 3 | iTransformer | iTransformer |
 | 4 | LSTM | LSTM |
 | 5 | DLinear | DLinear |
 | 6 | PatchTST | PatchTST |
@@ -1496,7 +1496,7 @@ Ranking by MAE is **changed** between the clean test and 20 % missing.
 | 10 | Informer | Informer |
 | 11 | Autoformer | Autoformer |
 
-Ranking by MAE is **changed** between the clean test and 20 % missing.
+Ranking by MAE is **unchanged** between the clean test and 20 % missing.
 
 
 ---
@@ -1551,7 +1551,7 @@ Ranking by MAE is **changed** between the clean test and 20 % missing.
 | Recipe | validation loss | clean MAE | outage MAE | degradation | rank under outage |
 |---|---|---|---|---|---|
 | published (Huber, no augmentation) | 0.1592 | 4.150 | 6.637 | +60% | 8 / 11 |
-| with outage augmentation | 0.1605 | 4.255 | 6.307 | +48% | 8 / 11 |
+| with outage augmentation | 0.1605 | 4.255 | 6.307 | +48% | 7 / 10 |
 
 ### Every model under the outage (MAE, variant A: last 16 h lost)
 
@@ -1559,31 +1559,31 @@ Ranking by MAE is **changed** between the clean test and 20 % missing.
 |---|---|---|---|---|---|
 | TimesNet | 6.110 | 6.008 | -0.102 | 2 | 1 |
 | Autoformer | 6.007 | 6.094 | +0.087 | 1 | 2 |
-| Transformer | 6.196 | 6.121 | -0.075 | 3 | 3 |
-| iTransformer | 6.249 | 6.128 | -0.121 | 4 | 4 |
+| Transformer | 6.196 | 6.121 | -0.075 | 4 | 3 |
+| iTransformer | 6.249 | 6.128 | -0.121 | 5 | 4 |
 | LSTM | 6.893 | 6.128 | -0.765 | 9 | 5 |
 | PatchTST | 6.394 | 6.238 | -0.156 | 6 | 6 |
-| Crossformer | 6.338 | 6.274 | -0.065 | 5 | 7 |
-| **MeteoFormer** | 6.637 | 6.307 | -0.330 | 8 | 8 |
-| DLinear | 6.587 | 6.576 | -0.011 | 7 | 9 |
-| Informer | 7.033 | 6.783 | -0.251 | 10 | 10 |
-| TFT | 8.070 | 7.585 | -0.485 | 11 | 11 |
+| **MeteoFormer** | 6.637 | 6.307 | -0.330 | 8 | 7 |
+| DLinear | 6.587 | 6.576 | -0.011 | 7 | 8 |
+| Informer | 7.033 | 6.783 | -0.251 | 10 | 9 |
+| TFT | 8.070 | 7.585 | -0.485 | 11 | 10 |
+| Crossformer | 6.152 | _missing_ | | 3 | |
 
 ### Accuracy on clean data, every model
 
 | Model | MAE published | MAE variant | Δ | rank published | rank variant |
 |---|---|---|---|---|---|
-| **MeteoFormer** | 4.151 | 4.255 | +0.104 | 1 | 1 |
-| Crossformer | 4.247 | 4.268 | +0.021 | 2 | 2 |
-| iTransformer | 4.251 | 4.275 | +0.024 | 3 | 3 |
-| LSTM | 4.343 | 4.329 | -0.014 | 4 | 4 |
-| PatchTST | 4.370 | 4.346 | -0.025 | 6 | 5 |
-| DLinear | 4.362 | 4.356 | -0.006 | 5 | 6 |
-| TimesNet | 4.426 | 4.450 | +0.024 | 7 | 7 |
-| TFT | 4.676 | 4.653 | -0.023 | 8 | 8 |
-| Informer | 4.932 | 4.864 | -0.068 | 10 | 9 |
-| Transformer | 4.895 | 4.892 | -0.003 | 9 | 10 |
-| Autoformer | 5.347 | 5.349 | +0.002 | 11 | 11 |
+| **MeteoFormer** | 4.151 | 4.255 | +0.104 | 2 | 1 |
+| iTransformer | 4.251 | 4.275 | +0.024 | 3 | 2 |
+| LSTM | 4.343 | 4.329 | -0.014 | 4 | 3 |
+| PatchTST | 4.370 | 4.346 | -0.025 | 6 | 4 |
+| DLinear | 4.362 | 4.356 | -0.006 | 5 | 5 |
+| TimesNet | 4.426 | 4.450 | +0.024 | 7 | 6 |
+| TFT | 4.676 | 4.653 | -0.023 | 8 | 7 |
+| Informer | 4.932 | 4.864 | -0.068 | 10 | 8 |
+| Transformer | 4.895 | 4.892 | -0.003 | 9 | 9 |
+| Autoformer | 5.347 | 5.349 | +0.002 | 11 | 10 |
+| Crossformer | 4.138 | _missing_ | | 1 | |
 
 **`analysis/cross_station.md`**
 
@@ -1593,9 +1593,9 @@ Per model: the seed-mean MAE at each station, then mean ± sd across stations; i
 
 | Rank | Model | in-domain MAE | transfer MAE (mean ± sd over stations) | transfer RMSE | Δ vs in-domain | stations where 1st |
 |---|---|---|---|---|---|---|
-| 1 | MeteoFormer | 4.151 | 4.114 ± 0.068 | 8.125 ± 0.163 | -0.036 | 9/11 |
-| 2 | iTransformer | 4.251 | 4.183 ± 0.096 | 8.109 ± 0.204 | -0.068 | 2/11 |
-| 3 | Crossformer | 4.247 | 4.211 ± 0.076 | 7.876 ± 0.196 | -0.036 | 0/11 |
+| 1 | Crossformer | 4.138 | 4.093 ± 0.089 | 7.792 ± 0.198 | -0.045 | 8/11 |
+| 2 | MeteoFormer | 4.151 | 4.114 ± 0.068 | 8.125 ± 0.163 | -0.036 | 3/11 |
+| 3 | iTransformer | 4.251 | 4.183 ± 0.096 | 8.109 ± 0.204 | -0.068 | 0/11 |
 | 4 | DLinear | 4.362 | 4.281 ± 0.104 | 8.213 ± 0.224 | -0.081 | 0/11 |
 | 5 | PatchTST | 4.370 | 4.314 ± 0.106 | 8.203 ± 0.231 | -0.056 | 0/11 |
 | 6 | LSTM | 4.343 | 4.315 ± 0.091 | 8.003 ± 0.208 | -0.028 | 0/11 |
@@ -1611,19 +1611,19 @@ Kendall τ between the in-domain ranking (Aotizhongxin) and the ranking at each 
 
 | Station | winner | MeteoFormer rank | Kendall τ vs in-domain |
 |---|---|---|---|
-| Changping | iTransformer | 2 / 11 | 0.85 |
-| Dingling | iTransformer | 2 / 11 | 0.85 |
-| Dongsi | MeteoFormer | 1 / 11 | 0.96 |
-| Guanyuan | MeteoFormer | 1 / 11 | 0.96 |
+| Changping | Crossformer | 3 / 11 | 0.89 |
+| Dingling | Crossformer | 3 / 11 | 0.89 |
+| Dongsi | Crossformer | 2 / 11 | 1.00 |
+| Guanyuan | Crossformer | 2 / 11 | 1.00 |
 | Gucheng | MeteoFormer | 1 / 11 | 0.89 |
-| Huairou | MeteoFormer | 1 / 11 | 0.78 |
-| Nongzhanguan | MeteoFormer | 1 / 11 | 1.00 |
-| Shunyi | MeteoFormer | 1 / 11 | 0.96 |
-| Tiantan | MeteoFormer | 1 / 11 | 1.00 |
+| Huairou | MeteoFormer | 1 / 11 | 0.82 |
+| Nongzhanguan | Crossformer | 2 / 11 | 1.00 |
+| Shunyi | Crossformer | 2 / 11 | 0.96 |
+| Tiantan | Crossformer | 2 / 11 | 1.00 |
 | Wanliu | MeteoFormer | 1 / 11 | 0.93 |
-| Wanshouxigong | MeteoFormer | 1 / 11 | 0.96 |
+| Wanshouxigong | Crossformer | 2 / 11 | 1.00 |
 
-Kendall τ over stations: mean 0.92, min 0.78, max 1.00.
+Kendall τ over stations: mean 0.94, min 0.82, max 1.00.
 
 Per-channel replication: the error budget behind these aggregates is the same in domain and on the unseen stations — our deficit against Crossformer is the humidity channel and nothing else (in domain RH +21.8, transfer +24.1 in MSE units, while temperature stays at -7.8 / -8.2 in our favour). See the replication section of [analysis/error_decomposition.md](analysis/error_decomposition.md).
 
@@ -1633,9 +1633,9 @@ Per-channel replication: the error budget behind these aggregates is the same in
 
 | Model | Changping | Dingling | Dongsi | Guanyuan | Gucheng | Huairou | Nongzhanguan | Shunyi | Tiantan | Wanliu | Wanshouxigong |
 |---|---|---|---|---|---|---|---|---|---|---|---|
+| Crossformer | 3.937 | 3.942 | 4.129 | 4.136 | 4.135 | 4.151 | 4.135 | 3.994 | 4.149 | 4.177 | 4.139 |
 | MeteoFormer | 4.010 | 4.017 | 4.176 | 4.168 | 4.111 | 4.084 | 4.178 | 4.036 | 4.178 | 4.121 | 4.179 |
 | iTransformer | 4.009 | 4.017 | 4.258 | 4.245 | 4.187 | 4.162 | 4.254 | 4.120 | 4.252 | 4.257 | 4.249 |
-| Crossformer | 4.086 | 4.103 | 4.261 | 4.257 | 4.239 | 4.263 | 4.250 | 4.091 | 4.245 | 4.268 | 4.255 |
 | DLinear | 4.104 | 4.104 | 4.362 | 4.362 | 4.301 | 4.228 | 4.362 | 4.199 | 4.362 | 4.342 | 4.362 |
 | PatchTST | 4.114 | 4.114 | 4.370 | 4.370 | 4.349 | 4.359 | 4.370 | 4.255 | 4.370 | 4.417 | 4.370 |
 | LSTM | 4.178 | 4.161 | 4.330 | 4.335 | 4.353 | 4.470 | 4.340 | 4.224 | 4.349 | 4.380 | 4.341 |
@@ -1716,7 +1716,7 @@ Our RMSE 5.267 → 5.162; Crossformer 5.166 → 5.153. Our MAE 3.025 → 3.019.
 |---|---|---|---|---|
 | **MeteoFormer** | 0.845 ± 0.019 | 0.819 | +0.025 | 0.933 |
 | Autoformer | 0.736 ± 0.043 | 0.821 | -0.085 | 0.839 |
-| Crossformer | 0.939 ± 0.056 | 0.916 | +0.023 | 0.849 |
+| Crossformer | 0.875 ± 0.018 | 0.914 | -0.040 | 0.849 |
 | DLinear | 0.840 ± 0.010 | 0.912 | -0.071 | 0.814 |
 | Informer | 0.817 ± 0.026 | 0.780 | +0.036 | 0.952 |
 | LSTM | 0.820 ± 0.016 | 0.885 | -0.064 | 0.870 |
@@ -1732,7 +1732,7 @@ Our RMSE 5.267 → 5.162; Crossformer 5.166 → 5.153. Our MAE 3.025 → 3.019.
 |---|---|---|---|---|---|---|
 | **MeteoFormer** | 4.151 | 4.157 | 8.216 | 8.057 | 252.42 | 242.40 |
 | Autoformer | 5.347 | 5.582 | 9.417 | 9.579 | 311.08 | 326.61 |
-| Crossformer | 4.247 | 4.319 | 8.002 | 7.931 | 230.74 | 225.14 |
+| Crossformer | 4.138 | 4.216 | 7.916 | 7.900 | 228.78 | 229.84 |
 | DLinear | 4.362 | 4.540 | 8.381 | 8.394 | 257.87 | 258.71 |
 | Informer | 4.932 | 4.913 | 8.965 | 8.617 | 283.82 | 261.02 |
 | LSTM | 4.343 | 4.512 | 8.103 | 8.219 | 237.74 | 247.69 |
@@ -1742,7 +1742,7 @@ Our RMSE 5.267 → 5.162; Crossformer 5.166 → 5.153. Our MAE 3.025 → 3.019.
 | Transformer | 4.895 | 5.020 | 8.923 | 8.867 | 285.88 | 285.12 |
 | iTransformer | 4.251 | 4.440 | 8.266 | 8.272 | 250.76 | 251.73 |
 
-Our RMSE 8.216 → 8.057; Crossformer 8.002 → 7.931. Our MAE 4.151 → 4.157.
+Our RMSE 8.216 → 8.057; Crossformer 7.916 → 7.900. Our MAE 4.151 → 4.157.
 
 ## Does the squared-loss deficit survive calibration?
 
@@ -1751,7 +1751,7 @@ Diebold–Mariano on the per-window loss, our model against Crossformer, **both 
 | Dataset | ΔL1 before | ΔL1 after | ΔL2 before | ΔL2 after |
 |---|---|---|---|---|
 | Jena | -0.0824 (9.93e-12) | -0.0845 (8.22e-15) | +1.0513 (1.63e-07) | +0.0934 (0.607) |
-| Beijing (Aotizhongxin) | -0.0964 (0.000492) | -0.1620 (3.48e-06) | +3.4437 (0.000365) | +2.0195 (0.0759) |
+| Beijing (Aotizhongxin) | +0.0128 (0.716) | -0.0583 (0.0755) | +4.8413 (0.000232) | +2.5140 (0.0331) |
 
 **`analysis/loss_mse.md`** — appendix: MSE instead of Huber
 
@@ -1805,33 +1805,33 @@ Diebold–Mariano on the per-window loss, our model against Crossformer, **both 
 
 | Model | MAE published | MAE variant | Δ | rank published | rank variant |
 |---|---|---|---|---|---|
-| Crossformer | 4.247 | 4.110 | -0.137 | 2 | 1 |
-| **MeteoFormer** | 4.151 | 4.224 | +0.073 | 1 | 2 |
-| iTransformer | 4.251 | 4.251 | -0.000 | 3 | 3 |
-| TimesNet | 4.426 | 4.294 | -0.132 | 7 | 4 |
-| LSTM | 4.343 | 4.300 | -0.043 | 4 | 5 |
-| PatchTST | 4.370 | 4.347 | -0.023 | 6 | 6 |
-| DLinear | 4.362 | 4.416 | +0.054 | 5 | 7 |
-| TFT | 4.676 | 4.685 | +0.009 | 8 | 8 |
-| Informer | 4.932 | 4.733 | -0.199 | 10 | 9 |
-| Transformer | 4.895 | 4.779 | -0.115 | 9 | 10 |
-| Autoformer | 5.347 | 5.257 | -0.090 | 11 | 11 |
+| **MeteoFormer** | 4.151 | 4.224 | +0.073 | 2 | 1 |
+| iTransformer | 4.251 | 4.251 | -0.000 | 3 | 2 |
+| TimesNet | 4.426 | 4.294 | -0.132 | 7 | 3 |
+| LSTM | 4.343 | 4.300 | -0.043 | 4 | 4 |
+| PatchTST | 4.370 | 4.347 | -0.023 | 6 | 5 |
+| DLinear | 4.362 | 4.416 | +0.054 | 5 | 6 |
+| TFT | 4.676 | 4.685 | +0.009 | 8 | 7 |
+| Informer | 4.932 | 4.733 | -0.199 | 10 | 8 |
+| Transformer | 4.895 | 4.779 | -0.115 | 9 | 9 |
+| Autoformer | 5.347 | 5.257 | -0.090 | 11 | 10 |
+| Crossformer | 4.138 | _missing_ | | 1 | |
 
 ### RMSE
 
 | Model | RMSE published | RMSE variant | Δ | rank published | rank variant |
 |---|---|---|---|---|---|
-| Crossformer | 8.002 | 7.938 | -0.064 | 1 | 1 |
-| LSTM | 8.103 | 8.040 | -0.063 | 2 | 2 |
-| TimesNet | 8.273 | 8.164 | -0.109 | 5 | 3 |
-| **MeteoFormer** | 8.216 | 8.185 | -0.031 | 3 | 4 |
-| iTransformer | 8.266 | 8.214 | -0.052 | 4 | 5 |
-| PatchTST | 8.336 | 8.340 | +0.004 | 6 | 6 |
-| DLinear | 8.381 | 8.369 | -0.012 | 7 | 7 |
-| Informer | 8.965 | 8.698 | -0.267 | 10 | 8 |
-| TFT | 8.431 | 8.801 | +0.370 | 8 | 9 |
-| Transformer | 8.923 | 8.895 | -0.028 | 9 | 10 |
-| Autoformer | 9.417 | 9.434 | +0.018 | 11 | 11 |
+| LSTM | 8.103 | 8.040 | -0.063 | 2 | 1 |
+| TimesNet | 8.273 | 8.164 | -0.109 | 5 | 2 |
+| **MeteoFormer** | 8.216 | 8.185 | -0.031 | 3 | 3 |
+| iTransformer | 8.266 | 8.214 | -0.052 | 4 | 4 |
+| PatchTST | 8.336 | 8.340 | +0.004 | 6 | 5 |
+| DLinear | 8.381 | 8.369 | -0.012 | 7 | 6 |
+| Informer | 8.965 | 8.698 | -0.267 | 10 | 7 |
+| TFT | 8.431 | 8.801 | +0.370 | 8 | 8 |
+| Transformer | 8.923 | 8.895 | -0.028 | 9 | 9 |
+| Autoformer | 9.417 | 9.434 | +0.018 | 11 | 10 |
+| Crossformer | 7.916 | _missing_ | | 1 | |
 
 ### Why it falls short: dispersion of the humidity forecast
 
@@ -1841,7 +1841,7 @@ Diebold–Mariano on the per-window loss, our model against Crossformer, **both 
 |---|---|---|
 | published (Huber) | 0.933 | 0.819 |
 | with MSE | 0.919 | 0.838 |
-| Crossformer (published) | 0.849 | 0.916 |
+| Crossformer (published) | 0.849 | 0.914 |
 
 ## 7. Attention stability (for the reconstructed Table 6)
 

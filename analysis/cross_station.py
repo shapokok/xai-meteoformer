@@ -99,7 +99,9 @@ def main():
     print({k: len(v) for k, v in tests.items()})
 
     rows = pd.read_csv(a.out).to_dict("records") if os.path.exists(a.out) else []
-    done = {(r["model"], r["seed"], r["station"]) for r in rows}
+    # the ablation (with its normalization suffix) is part of the identity:
+    # without it a switched variant looks like an already finished run
+    done = {(r["model"], r["ablation"], r["seed"], r["station"]) for r in rows}
     ck = os.path.join(ROOT, "checkpoints")
     models = a.models or sorted({f.split(f"_{SRC}_")[0] for f in os.listdir(ck)
                                  if f.endswith(".pt") and f"_{SRC}_" in f})
@@ -111,7 +113,7 @@ def main():
             f = os.path.join(ck, f"{mn}_{SRC}_{abl}_s{seed}.pt")
             if not os.path.exists(f):
                 continue
-            todo = [st for st in tests if (mn, seed, st) not in done]
+            todo = [st for st in tests if (mn, abl, seed, st) not in done]
             if not todo:
                 continue
             set_seed(seed)
@@ -139,6 +141,9 @@ def main():
 
 
 def report(d):
+    # a model can have rows for several normalization variants; report only
+    # the one the main table uses (analysis/selection.py)
+    d = d[[a == selected_ablation(m, SRC) for m, a in zip(d.model, d.ablation)]]
     ref = pd.read_csv(os.path.join(ROOT, "analysis", "results_clean.csv"))
     L = []
     W = L.append

@@ -85,23 +85,23 @@ Under an outage in the last 16 h our model falls from **1st to 6th** by MAE.
 | Informer | 4.935±0.092 | 7.033±0.050 | 5.172±0.089 | **+42.5%** | +4.8% |
 | PatchTST | 4.369±0.046 | 6.394±0.045 | 4.469±0.043 | **+46.3%** | +2.3% |
 | iTransformer | 4.250±0.017 | 6.249±0.076 | 4.354±0.013 | **+47.0%** | +2.4% |
-| Crossformer | 4.248±0.095 | 6.338±0.178 | 4.295±0.085 | **+49.2%** | +1.1% |
+| Crossformer | 4.137±0.023 | 6.152±0.093 | 4.215±0.027 | **+48.7%** | +1.9% |
 | DLinear | 4.361±0.008 | 6.587±0.034 | 4.487±0.009 | **+51.0%** | +2.9% |
 | LSTM | 4.343±0.034 | 6.893±0.116 | 4.432±0.039 | **+58.7%** | +2.0% |
 | **MeteoFormer** | 4.150±0.039 | 6.637±0.244 | 4.167±0.040 | **+59.9%** | +0.4% |
 | TFT | 4.676±0.177 | 8.070±0.112 | 4.814±0.172 | **+72.7%** | +3.0% |
 
-Across all 55 (model, seed) pairs, losing the **last** 16 h costs **+45.9%** MAE on average, losing the **first** 16 h costs **+2.3%**. Paired Wilcoxon A vs B: p = 1.1e-10. A is worse than B for **55 of 55** pairs.
+Across all 55 (model, seed) pairs, losing the **last** 16 h costs **+45.8%** MAE on average, losing the **first** 16 h costs **+2.4%**. Paired Wilcoxon A vs B: p = 1.1e-10. A is worse than B for **55 of 55** pairs.
 
 ### Does first place survive an outage in the last 16 h?
 
 | Rank | intact | A: last 16 h lost |
 |---|---|---|
-| 1 | **MeteoFormer** 4.150 | Autoformer 6.007 |
-| 2 | Crossformer 4.248 | TimesNet 6.110 |
-| 3 | iTransformer 4.250 | Transformer 6.196 |
-| 4 | LSTM 4.343 | iTransformer 6.249 |
-| 5 | DLinear 4.361 | Crossformer 6.338 |
+| 1 | Crossformer 4.137 | Autoformer 6.007 |
+| 2 | **MeteoFormer** 4.150 | TimesNet 6.110 |
+| 3 | iTransformer 4.250 | Crossformer 6.152 |
+| 4 | LSTM 4.343 | Transformer 6.196 |
+| 5 | DLinear 4.361 | iTransformer 6.249 |
 | 6 | PatchTST 4.369 | PatchTST 6.394 |
 | 7 | TimesNet 4.426 | DLinear 6.587 |
 | 8 | TFT 4.676 | **MeteoFormer** 6.637 |
@@ -116,7 +116,7 @@ Under an outage in the last 16 h our model falls from **1st to 8th** by MAE.
 | Model | T | RH | P | WS |
 |---|---|---|---|---|
 | Autoformer | -1 | +16 | +10 | +7 |
-| Crossformer | +30 | +51 | +77 | +17 |
+| Crossformer | +30 | +48 | +82 | +16 |
 | DLinear | +68 | +52 | +42 | +28 |
 | Informer | +21 | +50 | +43 | +21 |
 | LSTM | +43 | +63 | +65 | +23 |
